@@ -100,7 +100,7 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 
 - **步骤条**只描述"接下来会发生什么"，不制造填写负担：只有第 1 步需要用户输入。
 - **高级选项**默认折叠：模块上限（≤6）、字段上限（≤15/模块）、输出目录——初阶用户永远不用打开它。
-- **启动指令生成器**：把需求 + 选项组装成一段结构化 prompt，一键复制，粘贴到对话即启动全流程（v1 通道；v2 演进为页面直发会话）。
+- **一键开启会话（无复制粘贴）**：把需求 + 选项组装成结构化 kickoff prompt，点击「开始生成会话」后**直接在宿主内启动流程**——优先通过 `uiWorkspace.connectWorkspace()` + `sessions.binding(id).session.prompt()` 创建会话并自动发送；若 Remote 通道不可用则回退为 `startSession({ prompt })`，把内容预填进输入框（仍无需复制）。
 - 视觉：全部走 `--dsw-alias-*` 主题 token，跟随明暗主题；class 前缀 `isb-`。
 
 ### 5.1 语言与主题（2026-11-06 修正）
@@ -119,8 +119,8 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 
 ## 7. 路线图
 
-- **v1（本版）**：Flask-Admin renderer + 向导页（需求工作台/示例/默认值/启动指令生成器）+ ISD schema。
-- **v1.x**：页面直发会话（Remote 通道）；`tool.call.toolview` 渲染工具专属结果卡片；蓝图 projection → wire.view 页面实时可视化。
+- **v1（本版）**：Flask-Admin renderer + 向导页（需求工作台/示例/默认值/一键开启会话）+ ISD schema。
+- **v1.x**：一键开启会话（已完成）；`tool.call.toolview` 渲染工具专属结果卡片；蓝图 projection → wire.view 页面实时可视化。
 - **v2**：多 renderer（fastapi-sqladmin / nextjs-prisma / vue-vite）；lark 文本 DSL 前端（`.isd` → 同一棵 ISD AST）；渲染产物自检（py_compile）。
 
 ## 8. 实测记录与运维知识（2026-11-06）

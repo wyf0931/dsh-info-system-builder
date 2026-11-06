@@ -36,10 +36,12 @@ window.__ModuleLoader__.load({
         'advanced.fields': '每模块字段数上限',
         'advanced.dir': '输出目录（留空使用默认）',
         'advanced.dirPlaceholder': 'info-systems/<slug>/',
-        'actions.generate': '生成启动指令',
-        'actions.copy': '复制指令',
-        'actions.copied': '已复制 ✓ 现在粘贴到下方对话发送',
-        'prompt.title': '你的启动指令',
+        'actions.start': '开始生成会话',
+        'actions.starting': '正在开启会话…',
+        'actions.startHint': '直接在当前工作区开启新会话并发送需求，无需复制。',
+        'actions.sent': '已发送 ✓ 已切换到新会话，AI 正在设计蓝图。',
+        'actions.draft': '已开启新会话并把需求填入输入框，按回车发送即可。',
+        'actions.failed': '无法自动开启会话，请直接在对话中发送需求。',
         'auto.title': '接下来 AI 会自动完成',
         'auto.1': '需求扩写：识别业务领域、使用者与核心场景',
         'auto.2': '蓝图设计：划分模块、设计字段（类型/必填/可搜索/中文标签）',
@@ -82,10 +84,12 @@ window.__ModuleLoader__.load({
         'advanced.fields': 'Max fields per module',
         'advanced.dir': 'Output directory (blank = default)',
         'advanced.dirPlaceholder': 'info-systems/<slug>/',
-        'actions.generate': 'Generate kickoff prompt',
-        'actions.copy': 'Copy prompt',
-        'actions.copied': 'Copied ✓ now paste it into the chat below',
-        'prompt.title': 'Your kickoff prompt',
+        'actions.start': 'Start building session',
+        'actions.starting': 'Starting session…',
+        'actions.startHint': 'Opens a new session in this workspace and sends your requirement — no copy/paste.',
+        'actions.sent': 'Sent ✓ switched to the new session; AI is designing the blueprint.',
+        'actions.draft': 'New session opened with your requirement pre-filled — press Enter to send.',
+        'actions.failed': 'Could not start the session automatically; send the requirement in the chat.',
         'auto.title': 'AI then does automatically',
         'auto.1': 'Expands the requirement: domain, users, key scenarios',
         'auto.2': 'Designs the blueprint: modules + fields (types/required/searchable/labels)',
@@ -185,14 +189,14 @@ window.__ModuleLoader__.load({
     /* ------------------------------------------------------------------ */
     function WizardPage(props) {
       const t = props.text;
+      const app = props.app;
       const [requirement, setRequirement] = React.useState('');
       const [maxModules, setMaxModules] = React.useState(6);
       const [maxFields, setMaxFields] = React.useState(15);
       const [outputDir, setOutputDir] = React.useState('');
-      const [prompt, setPrompt] = React.useState(null);
-      const [copied, setCopied] = React.useState(false);
+      const [launchState, setLaunchState] = React.useState('idle'); // idle|starting|sent|draft|error
 
-      const buildPrompt = () => {
+      const buildKickoff = () => {
         const lines = [];
         lines.push(t('kickoff.intro'));
         lines.push('');
@@ -207,25 +211,51 @@ window.__ModuleLoader__.load({
         return lines.join('\n');
       };
 
-      const onGenerate = () => {
-        if (!requirement.trim()) return;
-        setPrompt(buildPrompt());
-        setCopied(false);
-      };
-
-      const onCopy = async () => {
-        if (!prompt) return;
+      /**
+       * Launch the flow inside the Harness itself — no copy/paste.
+       * Preferred: create/reuse a blank session and send the kickoff prompt
+       * from the Client directly. Fallback: open a blank session with the
+       * prompt pre-filled in the composer (user presses Enter).
+       */
+      const onLaunch = async () => {
+        if (!requirement.trim() || launchState === 'starting') return;
+        setLaunchState('starting');
+        const text = buildKickoff();
+        let ui;
         try {
-          await navigator.clipboard.writeText(prompt);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2500);
+          ui = app && typeof app.get === 'function' ? app.get('uiWorkspace') : undefined;
         } catch {
-          const area = document.createElement('textarea');
-          area.value = prompt;
-          document.body.appendChild(area);
-          area.select();
-          try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* user copies manually */ }
-          area.remove();
+          ui = undefined;
+        }
+        if (!ui || typeof ui.startSession !== 'function') {
+          setLaunchState('error');
+          return;
+        }
+        // 1) Try to send directly into a fresh session.
+        try {
+          if (typeof ui.connectWorkspace === 'function') {
+            const sessionId = await ui.connectWorkspace(undefined);
+            const sessions = app.get('sessions');
+            const binding = sessions && typeof sessions.binding === 'function' ? sessions.binding(sessionId) : undefined;
+            const face = binding && binding.session;
+            if (face && typeof face.prompt === 'function') {
+              const result = await face.prompt([{ type: 'text', text }], 'queue');
+              if (result && result.ok) {
+                if (typeof ui.openSession === 'function') ui.openSession(sessionId);
+                setLaunchState('sent');
+                return;
+              }
+            }
+          }
+        } catch {
+          // fall through to the draft fallback below
+        }
+        // 2) Fallback: open a blank session with the prompt in the composer.
+        try {
+          ui.startSession(undefined, { prompt: text, whenDraftExists: 'replace' });
+          setLaunchState('draft');
+        } catch {
+          setLaunchState('error');
         }
       };
 
@@ -254,13 +284,13 @@ window.__ModuleLoader__.load({
             [t('example.office'), t('example.resume'), t('example.asset')].map((example, i) =>
               h('button', {
                 key: i, className: 'isb-chip', type: 'button',
-                onClick: () => { setRequirement(example); setPrompt(null); },
+                onClick: () => { setRequirement(example); setLaunchState('idle'); },
               }, example))),
           h('textarea', {
             className: 'isb-input',
             value: requirement,
             placeholder: t('example.office'),
-            onChange: (e) => { setRequirement(e.target.value); setPrompt(null); },
+            onChange: (e) => { setRequirement(e.target.value); setLaunchState('idle'); },
           }),
           h('details', { className: 'isb-advanced' },
             h('summary', null, t('advanced.title')),
@@ -289,14 +319,15 @@ window.__ModuleLoader__.load({
                 })))),
           h('div', { className: 'isb-actions' },
             h('button', {
-              className: 'isb-btn-primary', type: 'button', disabled: !requirement.trim(),
-              onClick: onGenerate,
-            }, t('actions.generate')),
-            prompt && h('button', { className: 'isb-btn-ghost', type: 'button', onClick: onCopy },
-              copied ? t('actions.copied') : t('actions.copy'))),
-          prompt && h('div', { className: 'isb-prompt' },
-            h('div', { className: 'isb-prompt-head' }, t('prompt.title')),
-            h('pre', { className: 'isb-pre' }, prompt))),
+              className: 'isb-btn-primary', type: 'button',
+              disabled: !requirement.trim() || launchState === 'starting',
+              onClick: onLaunch,
+            }, launchState === 'starting' ? t('actions.starting') : t('actions.start')),
+            h('span', { className: 'isb-launch-hint' },
+              launchState === 'sent' ? t('actions.sent')
+                : launchState === 'draft' ? t('actions.draft')
+                  : launchState === 'error' ? t('actions.failed')
+                    : t('actions.startHint')))),
         // What AI does automatically
         h('section', { className: 'isb-card' },
           h('h2', { className: 'isb-card-title' }, t('auto.title')),
@@ -383,13 +414,11 @@ window.__ModuleLoader__.load({
 .isb-advanced-item{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .isb-select,.isb-text{padding:7px 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;outline:none}
 .isb-select:focus,.isb-text:focus{border-color:var(--dsw-alias-brand-primary)}
-.isb-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.isb-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.isb-launch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .isb-btn-primary{padding:9px 18px;border-radius:10px;border:none;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-size:13px;font-weight:600;cursor:pointer}
 .isb-btn-primary:disabled{opacity:.45;cursor:not-allowed}
-.isb-btn-ghost{padding:9px 16px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:13px;cursor:pointer}
-.isb-btn-ghost:hover{background:var(--dsw-alias-bg-layer-2)}
-.isb-prompt{margin-top:16px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden}
-.isb-prompt-head{padding:8px 12px;font-size:12px;font-weight:600;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+
 .isb-pre{margin:0;padding:12px;background:var(--dsw-alias-bg-layer-2);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary)}
 .isd-pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .isb-auto-list{margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.9;color:var(--dsw-alias-label-primary)}
@@ -425,7 +454,7 @@ window.__ModuleLoader__.load({
           ));
           const disposePage = ctx.slots.inject('main', () => ctx.slots.register(
             { name: 'main', key: 'info-system-builder' },
-            (props) => h(WizardPage, { ...props, text: t }),
+            (props) => h(WizardPage, { ...props, text: t, app: ctx }),
           ));
           return () => { disposeIcon(); disposePage(); };
         }, 'info-system-builder: register panel + wizard page');
