@@ -494,7 +494,7 @@ window.__ModuleLoader__.load({
        controls use --dsw-alias-bg-base as foreground for both themes. */
     function Style() {
       return h('style', null, `
-.isb-root{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;max-width:880px;margin:0 auto;padding:24px 24px 64px;color:var(--dsw-alias-label-primary)}
+.isb-root{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;padding:24px 32px 64px;color:var(--dsw-alias-label-primary)}
 .isb-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .isb-header-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1)}
 .isb-title{font-size:20px;font-weight:650;margin:0;line-height:1.2}
