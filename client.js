@@ -1,11 +1,13 @@
 /**
  * Info System Builder — Client half.
  *
- * Registers a sidebar panel entry + a main-panel wizard page: a guided cockpit
- * for turning one sentence into a running admin system. All styling goes
- * through --dsw-alias-* theme tokens (class prefix `isb-`), component-local
- * so unmounting removes it. Text is bilingual (zh/en), follows the DSH locale
- * service, defaults to Chinese, and stays readable in both themes.
+ * Two tabs: 新建系统 (describe → launch a session in-place) and 历史项目
+ * (project list with preview / download / reveal / delete, backed by the
+ * Host half's /info-system-builder/* routes).
+ *
+ * Styling uses only --dsw-alias-* tokens (class prefix `isb-`); the page is a
+ * self-scrolling container so narrow windows never clip content. Text is
+ * bilingual, follows the DSH locale service, defaults to Chinese.
  */
 
 window.__ModuleLoader__.load({
@@ -21,10 +23,8 @@ window.__ModuleLoader__.load({
       zh: {
         'app.title': '信息系统生成器',
         'app.tagline': '从一句话到可运行的管理系统',
-        'step.describe': '描述需求',
-        'step.blueprint': '蓝图设计',
-        'step.stack': '选择技术栈',
-        'step.run': '生成运行',
+        'tabs.new': '新建系统',
+        'tabs.history': '历史项目',
         'hero.title': '告诉我你要管什么',
         'hero.hint': '一句话就够——说清三件事：谁用、管什么、要查什么。AI 会自动扩写成完整需求。',
         'hero.examples': '试试这些例子',
@@ -43,21 +43,31 @@ window.__ModuleLoader__.load({
         'actions.sent': '已发送 ✓ 已切换到新会话，AI 正在设计蓝图。',
         'actions.draft': '已开启新会话并把需求填入输入框，按回车发送即可。',
         'actions.failed': '无法自动开启会话，请直接在对话中发送需求。',
-        'auto.title': '接下来 AI 会自动完成',
-        'auto.1': '需求扩写：识别业务领域、使用者与核心场景',
-        'auto.2': '蓝图设计：划分模块、设计字段（类型/必填/可搜索/中文标签）',
-        'auto.3': '写出 system.isd.json 定义文件，展示蓝图后直接渲染项目',
-        'auto.confirmHint': '想改蓝图？任何时候直接说"把 XX 模块加个字段"，AI 改完定义文件重新渲染即可。',
-        'stacks.title': '实现技术栈',
-        'stacks.recommended': '推荐 · 默认',
-        'stacks.soon': '即将支持',
-        'stacks.why': '单命令启动（uv run）· 自带 SQLite · 中文界面 · 傻瓜式部署',
-        'stacks.fastapi': 'SQLAdmin + uvicorn',
-        'stacks.nextjs': 'Prisma + SQLite',
-        'stacks.vue': 'Vite + Element Plus',
+        'auto.summary': 'AI 会自动完成：扩写需求 → 设计模块与字段 → 写出 ISD 定义 → 渲染项目',
+        'stack.summary': '技术栈：Flask-Admin + SQLite（默认）· 更多栈即将开放',
         'isd.title': 'ISD 定义文件速览（懂技术的你可以直接编辑它）',
         'isd.hint': '渲染工具把它当作"定制化语法文件"解析：改完重新渲染即可，幂等无副作用。',
         'isd.types': '# 字段类型: string / text / integer / float / boolean / date / time / datetime',
+        'history.refresh': '刷新',
+        'history.loading': '加载中…',
+        'history.empty': '还没有生成过项目。切换到「新建系统」开始第一个。',
+        'history.error': '无法加载项目列表',
+        'history.rendered': '已生成',
+        'history.blueprintOnly': '仅蓝图',
+        'history.modules': '模块',
+        'history.fields': '字段',
+        'history.previewRunning': '预览中',
+        'history.previewStart': '启动预览',
+        'history.previewStop': '停止预览',
+        'history.download': '下载',
+        'history.reveal': '打开文件夹',
+        'history.delete': '删除',
+        'history.confirmDelete': '确认删除？',
+        'history.cancel': '取消',
+        'history.copyPath': '复制路径',
+        'history.copied': '已复制路径',
+        'history.pathUnavailable': '路径不可用',
+        'history.startFailed': '启动失败',
         'kickoff.intro': '请帮我生成一个内部信息系统。',
         'kickoff.requirement': '需求',
         'kickoff.conventions': '约定：',
@@ -70,10 +80,8 @@ window.__ModuleLoader__.load({
       en: {
         'app.title': 'Info System Builder',
         'app.tagline': 'From one sentence to a running admin system',
-        'step.describe': 'Describe',
-        'step.blueprint': 'Blueprint',
-        'step.stack': 'Stack',
-        'step.run': 'Generate & run',
+        'tabs.new': 'New system',
+        'tabs.history': 'Projects',
         'hero.title': 'Tell me what you need to manage',
         'hero.hint': 'One sentence is enough — cover three things: who uses it, what it tracks, what you need to look up. AI expands it into full requirements.',
         'hero.examples': 'Try an example',
@@ -92,21 +100,31 @@ window.__ModuleLoader__.load({
         'actions.sent': 'Sent ✓ switched to the new session; AI is designing the blueprint.',
         'actions.draft': 'New session opened with your requirement pre-filled — press Enter to send.',
         'actions.failed': 'Could not start the session automatically; send the requirement in the chat.',
-        'auto.title': 'AI then does automatically',
-        'auto.1': 'Expands the requirement: domain, users, key scenarios',
-        'auto.2': 'Designs the blueprint: modules + fields (types/required/searchable/labels)',
-        'auto.3': 'Writes system.isd.json, shows the blueprint, renders the project',
-        'auto.confirmHint': 'Want changes? Just say "add a field to XX" any time — AI edits the ISD and re-renders.',
-        'stacks.title': 'Implementation stack',
-        'stacks.recommended': 'Recommended · default',
-        'stacks.soon': 'Coming soon',
-        'stacks.why': 'One-command start (uv run) · bundled SQLite · localized UI',
-        'stacks.fastapi': 'SQLAdmin + uvicorn',
-        'stacks.nextjs': 'Prisma + SQLite',
-        'stacks.vue': 'Vite + Element Plus',
+        'auto.summary': 'AI then does it all: expand requirement → design modules & fields → write the ISD → render the project',
+        'stack.summary': 'Stack: Flask-Admin + SQLite (default) · more stacks coming soon',
         'isd.title': 'ISD definition at a glance (technical users can edit it)',
         'isd.hint': 'The render tool parses it as a custom syntax file: edit and re-render, idempotent.',
         'isd.types': '# field types: string / text / integer / float / boolean / date / time / datetime',
+        'history.refresh': 'Refresh',
+        'history.loading': 'Loading…',
+        'history.empty': 'No projects yet. Switch to New system to start one.',
+        'history.error': 'Could not load projects',
+        'history.rendered': 'Rendered',
+        'history.blueprintOnly': 'Blueprint only',
+        'history.modules': 'modules',
+        'history.fields': 'fields',
+        'history.previewRunning': 'Preview running',
+        'history.previewStart': 'Start preview',
+        'history.previewStop': 'Stop preview',
+        'history.download': 'Download',
+        'history.reveal': 'Open folder',
+        'history.delete': 'Delete',
+        'history.confirmDelete': 'Confirm delete?',
+        'history.cancel': 'Cancel',
+        'history.copyPath': 'Copy path',
+        'history.copied': 'Path copied',
+        'history.pathUnavailable': 'Path unavailable',
+        'history.startFailed': 'Could not start',
         'kickoff.intro': 'Please build me an internal information system.',
         'kickoff.requirement': 'Requirement',
         'kickoff.conventions': 'Conventions:',
@@ -121,11 +139,6 @@ window.__ModuleLoader__.load({
     /**
      * Resolve the UI language: DSH locale service first (authoritative),
      * then browser language, then the product default — Chinese.
-     *
-     * When the locale service is present but its snapshot shape is unfamiliar,
-     * default to Chinese rather than falling back to the browser: the host UI
-     * language is the better signal, and Chinese is this product's primary
-     * audience. Only an explicit English locale selects English.
      */
     function resolveLang(ctx) {
       try {
@@ -169,6 +182,18 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /** POST helper for the Host routes. */
+    async function post(route, body) {
+      const response = await fetch(`/info-system-builder/${route}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
     /* ------------------------------------------------------------------ */
     /* Panel icon (sidebar.panellist): renders the glyph at the given size */
     /* ------------------------------------------------------------------ */
@@ -187,9 +212,9 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ */
-    /* Wizard page (main panel)                                           */
+    /* New-system tab                                                     */
     /* ------------------------------------------------------------------ */
-    function WizardPage(props) {
+    function NewSystemTab(props) {
       const t = props.text;
       const app = props.app;
       const [requirement, setRequirement] = React.useState('');
@@ -213,12 +238,6 @@ window.__ModuleLoader__.load({
         return lines.join('\n');
       };
 
-      /**
-       * Launch the flow inside the Harness itself — no copy/paste.
-       * Preferred: create/reuse a blank session and send the kickoff prompt
-       * from the Client directly. Fallback: open a blank session with the
-       * prompt pre-filled in the composer (user presses Enter).
-       */
       const onLaunch = async () => {
         if (!requirement.trim() || launchState === 'starting') return;
         setLaunchState('starting');
@@ -233,7 +252,6 @@ window.__ModuleLoader__.load({
           setLaunchState('error');
           return;
         }
-        // 1) Try to send directly into a fresh session.
         try {
           if (typeof ui.connectWorkspace === 'function') {
             const sessionId = await ui.connectWorkspace(undefined);
@@ -252,7 +270,6 @@ window.__ModuleLoader__.load({
         } catch {
           // fall through to the draft fallback below
         }
-        // 2) Fallback: open a blank session with the prompt in the composer.
         try {
           ui.startSession(undefined, { prompt: text, whenDraftExists: 'replace' });
           setLaunchState('draft');
@@ -261,23 +278,7 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const stepLabels = [t('step.describe'), t('step.blueprint'), t('step.stack'), t('step.run')];
-
-      return h('div', { className: 'isb-root' },
-        h(Style, null),
-        // Header
-        h('div', { className: 'isb-header' },
-          h('div', { className: 'isb-header-icon' }, h(PanelIcon, { size: 26, active: true })),
-          h('div', null,
-            h('h1', { className: 'isb-title' }, t('app.title')),
-            h('p', { className: 'isb-tagline' }, t('app.tagline')))),
-        // Steps rail
-        h('div', { className: 'isb-steps' },
-          stepLabels.map((label, i) =>
-            h('div', { key: label, className: 'isb-step' + (i === 0 ? ' isb-step-current' : '') },
-              h('span', { className: 'isb-step-num' }, String(i + 1)),
-              h('span', { className: 'isb-step-label' }, label)))),
-        // Requirement workbench
+      return h('div', null,
         h('section', { className: 'isb-card' },
           h('h2', { className: 'isb-card-title' }, t('hero.title')),
           h('p', { className: 'isb-card-hint' }, t('hero.hint')),
@@ -330,44 +331,12 @@ window.__ModuleLoader__.load({
                 : launchState === 'draft' ? t('actions.draft')
                   : launchState === 'error' ? t('actions.failed')
                     : t('actions.startHint')))),
-        // What AI does automatically
-        h('section', { className: 'isb-card' },
-          h('h2', { className: 'isb-card-title' }, t('auto.title')),
-          h('ul', { className: 'isb-auto-list' },
-            h('li', null, t('auto.1')),
-            h('li', null, t('auto.2')),
-            h('li', null, t('auto.3'))),
-          h('p', { className: 'isb-confirm-hint' }, t('auto.confirmHint'))),
-        // Stacks
-        h('section', { className: 'isb-card' },
-          h('h2', { className: 'isb-card-title' }, t('stacks.title')),
-          h('div', { className: 'isb-stacks' },
-            h('div', { className: 'isb-stack isb-stack-active' },
-              h('div', { className: 'isb-stack-head' },
-                h('span', { className: 'isb-stack-name' }, 'Flask-Admin'),
-                h('span', { className: 'isb-stack-badge' }, t('stacks.recommended'))),
-              h('p', { className: 'isb-stack-why' }, t('stacks.why'))),
-            h('div', { className: 'isb-stack' },
-              h('div', { className: 'isb-stack-head' },
-                h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'FastAPI'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.fastapi'))),
-            h('div', { className: 'isb-stack' },
-              h('div', { className: 'isb-stack-head' },
-                h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'Next.js'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.nextjs'))),
-            h('div', { className: 'isb-stack' },
-              h('div', { className: 'isb-stack-head' },
-                h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'Vue'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.vue'))))),
-        // ISD spec
-        h('section', { className: 'isb-card' },
-          h('details', null,
-            h('summary', { className: 'isb-card-title isb-summary-title' }, t('isd.title')),
-            h('p', { className: 'isb-card-hint' }, t('isd.hint')),
-            h('pre', { className: 'isb-pre isd-pre' }, ISD_EXAMPLE + '\n' + t('isd.types')))));
+        h('p', { className: 'isb-footnote' }, t('auto.summary')),
+        h('p', { className: 'isb-footnote' }, t('stack.summary')),
+        h('details', { className: 'isb-card isb-isd' },
+          h('summary', { className: 'isb-card-title isb-summary-title' }, t('isd.title')),
+          h('p', { className: 'isb-card-hint' }, t('isd.hint')),
+          h('pre', { className: 'isb-pre isd-pre' }, ISD_EXAMPLE + '\n' + t('isd.types'))));
     }
 
     const ISD_EXAMPLE = `{
@@ -384,23 +353,156 @@ window.__ModuleLoader__.load({
   ]
 }`;
 
+    /* ------------------------------------------------------------------ */
+    /* History tab                                                        */
+    /* ------------------------------------------------------------------ */
+    function HistoryTab(props) {
+      const t = props.text;
+      const [projects, setProjects] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
+      const [error, setError] = React.useState(null);
+      const [busy, setBusy] = React.useState(null);
+      const [confirming, setConfirming] = React.useState(null);
+      const [notice, setNotice] = React.useState(null);
+
+      const load = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await fetch('/info-system-builder/projects', { headers: { accept: 'application/json' } });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const data = await response.json();
+          setProjects(Array.isArray(data.projects) ? data.projects : []);
+        } catch (err) {
+          setError(String(err && err.message ? err.message : err));
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      React.useEffect(() => { load(); }, []);
+
+      const act = async (slug, workspacePath, action) => {
+        setBusy(`${action}:${slug}`);
+        setNotice(null);
+        try {
+          if (action === 'delete') {
+            await post('delete', { slug, workspacePath });
+          } else if (action === 'preview-start') {
+            const data = await post('preview/start', { slug, workspacePath });
+            if (data && data.url) window.open(data.url, '_blank', 'noopener');
+          } else if (action === 'preview-stop') {
+            await post('preview/stop', { slug, workspacePath });
+          } else if (action === 'reveal') {
+            await post('reveal', { slug, workspacePath });
+          }
+          await load();
+        } catch (err) {
+          setNotice(`${t('history.startFailed')}: ${String(err && err.message ? err.message : err)}`);
+        } finally {
+          setBusy(null);
+          setConfirming(null);
+        }
+      };
+
+      const copyPath = async (project) => {
+        try {
+          await navigator.clipboard.writeText(project.projectDir || project.isdPath || '');
+          setNotice(t('history.copied'));
+        } catch {
+          setNotice(t('history.pathUnavailable'));
+        }
+      };
+
+      const row = (project) => {
+        const key = `${project.workspacePath}::${project.slug}`;
+        const isBusy = busy !== null && busy.endsWith(`:${project.slug}`);
+        return h('div', { key, className: 'isb-project' },
+          h('div', { className: 'isb-project-main' },
+            h('div', { className: 'isb-project-title' },
+              h('span', { className: 'isb-project-name' }, project.name),
+              h('span', { className: 'isb-project-slug' }, project.slug)),
+            h('div', { className: 'isb-project-meta' },
+              h('span', null, `${project.workspace}`),
+              h('span', null, `${project.moduleCount} ${t('history.modules')} · ${project.fieldCount} ${t('history.fields')}`),
+              project.rendered
+                ? h('span', { className: 'isb-badge isb-badge-ok' }, t('history.rendered'))
+                : h('span', { className: 'isb-badge' }, t('history.blueprintOnly')),
+              project.preview
+                ? h('span', { className: 'isb-badge isb-badge-live' }, `${t('history.previewRunning')} :${project.preview.port}`)
+                : null)),
+          h('div', { className: 'isb-project-actions' },
+            project.preview
+              ? h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'preview-stop') }, t('history.previewStop'))
+              : h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy || !project.rendered, title: project.rendered ? '' : t('history.blueprintOnly'), onClick: () => act(project.slug, project.workspacePath, 'preview-start') }, t('history.previewStart')),
+            h('a', { className: 'isb-btn-sm isb-btn-link', href: `/info-system-builder/download?slug=${encodeURIComponent(project.slug)}&workspacePath=${encodeURIComponent(project.workspacePath)}`, download: `${project.slug}.tar.gz` }, t('history.download')),
+            h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'reveal') }, t('history.reveal')),
+            h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => copyPath(project) }, t('history.copyPath')),
+            confirming === key
+              ? h('span', { className: 'isb-confirm' },
+                h('button', { className: 'isb-btn-sm isb-btn-danger', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'delete') }, t('history.confirmDelete')),
+                h('button', { className: 'isb-btn-sm', type: 'button', onClick: () => setConfirming(null) }, t('history.cancel')))
+              : h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => setConfirming(key) }, t('history.delete'))));
+      };
+
+      return h('div', null,
+        h('div', { className: 'isb-history-head' },
+          h('div', { className: 'isb-history-title' }, `${t('tabs.history')} (${projects.length})`),
+          h('button', { className: 'isb-btn-sm', type: 'button', onClick: load, disabled: loading }, loading ? t('history.loading') : t('history.refresh'))),
+        notice ? h('p', { className: 'isb-notice' }, notice) : null,
+        error
+          ? h('div', { className: 'isb-card' },
+            h('p', { className: 'isb-error' }, `${t('history.error')}: ${error}`),
+            h('button', { className: 'isb-btn-sm', type: 'button', onClick: load }, t('history.refresh')))
+          : null,
+        loading && projects.length === 0 ? h('p', { className: 'isb-empty' }, t('history.loading')) : null,
+        !loading && !error && projects.length === 0 ? h('p', { className: 'isb-empty' }, t('history.empty')) : null,
+        projects.map(row));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Wizard page (main panel)                                           */
+    /* ------------------------------------------------------------------ */
+    function WizardPage(props) {
+      const t = props.text;
+      const app = props.app;
+      const [tab, setTab] = React.useState('new');
+
+      return h('div', { className: 'isb-root' },
+        h(Style, null),
+        h('div', { className: 'isb-header' },
+          h('div', { className: 'isb-header-icon' }, h(PanelIcon, { size: 26, active: true })),
+          h('div', null,
+            h('h1', { className: 'isb-title' }, t('app.title')),
+            h('p', { className: 'isb-tagline' }, t('app.tagline')))),
+        h('div', { className: 'isb-tabs' },
+          h('button', {
+            className: 'isb-tab' + (tab === 'new' ? ' isb-tab-active' : ''), type: 'button',
+            onClick: () => setTab('new'),
+          }, t('tabs.new')),
+          h('button', {
+            className: 'isb-tab' + (tab === 'history' ? ' isb-tab-active' : ''), type: 'button',
+            onClick: () => setTab('history'),
+          }, t('tabs.history'))),
+        tab === 'new'
+          ? h(NewSystemTab, { text: t, app })
+          : h(HistoryTab, { text: t }));
+    }
+
     /* Component-local stylesheet: unmounting the page removes it.
-       Foreground colors on filled controls use --dsw-alias-bg-base, so the
-       text always contrasts with --dsw-alias-brand-primary in both themes
-       (light: white on blue; dark: dark on light). Never hardcode a literal white colour. */
+       The root scrolls itself so narrow windows never clip content; filled
+       controls use --dsw-alias-bg-base as foreground for both themes. */
     function Style() {
       return h('style', null, `
-.isb-root{max-width:880px;margin:0 auto;padding:28px 24px 64px;color:var(--dsw-alias-label-primary)}
-.isb-header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.isb-root{height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;max-width:880px;margin:0 auto;padding:24px 24px 64px;color:var(--dsw-alias-label-primary)}
+.isb-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .isb-header-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1)}
 .isb-title{font-size:20px;font-weight:650;margin:0;line-height:1.2}
 .isb-tagline{margin:2px 0 0;font-size:13px;color:var(--dsw-alias-label-secondary)}
-.isb-steps{display:flex;gap:8px;margin-bottom:18px}
-.isb-step{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary)}
-.isb-step-current{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
-.isb-step-num{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);font-weight:700;font-size:11px}
-.isb-step-current .isb-step-num{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base)}
-.isb-card{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+.isb-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.isb-tab{padding:8px 14px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.isb-tab-active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
+.isb-card{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:14px;padding:18px 20px;margin-bottom:12px}
 .isb-card-title{font-size:15px;font-weight:650;margin:0 0 6px}
 .isb-summary-title{cursor:pointer}
 .isb-card-hint{margin:0 0 14px;font-size:13px;color:var(--dsw-alias-label-secondary);line-height:1.6}
@@ -408,7 +510,7 @@ window.__ModuleLoader__.load({
 .isb-chip-label{font-size:12px;color:var(--dsw-alias-label-secondary);margin-right:2px}
 .isb-chip{padding:5px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:12px;cursor:pointer;transition:border-color .15s,background .15s}
 .isb-chip:hover{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}
-.isb-input{width:100%;box-sizing:border-box;min-height:96px;padding:10px 12px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;resize:vertical;outline:none}
+.isb-input{width:100%;box-sizing:border-box;min-height:88px;padding:10px 12px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;resize:vertical;outline:none}
 .isb-input:focus{border-color:var(--dsw-alias-brand-primary)}
 .isb-advanced{margin-top:12px;font-size:13px}
 .isb-advanced summary{cursor:pointer;color:var(--dsw-alias-label-secondary)}
@@ -417,24 +519,34 @@ window.__ModuleLoader__.load({
 .isb-select,.isb-text{padding:7px 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;outline:none}
 .isb-select:focus,.isb-text:focus{border-color:var(--dsw-alias-brand-primary)}
 .isb-actions{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
-.isb-launch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .isb-btn-primary{padding:9px 18px;border-radius:10px;border:none;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-size:13px;font-weight:600;cursor:pointer}
 .isb-btn-primary:disabled{opacity:.45;cursor:not-allowed}
-
+.isb-launch-hint{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.isb-footnote{margin:0 0 6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.isb-isd{margin-top:12px}
 .isb-pre{margin:0;padding:12px;background:var(--dsw-alias-bg-layer-2);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary)}
 .isd-pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.isb-auto-list{margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.9;color:var(--dsw-alias-label-primary)}
-.isb-confirm-hint{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary);border-top:1px dashed var(--dsw-alias-border-l1);padding-top:10px}
-.isb-stacks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
-.isb-stack{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:12px 14px;background:var(--dsw-alias-bg-layer-2)}
-.isb-stack-active{border-color:var(--dsw-alias-brand-primary)}
-.isb-stack-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.isb-stack-name{font-size:13px;font-weight:650}
-.isb-stack-soon-name{color:var(--dsw-alias-label-secondary)}
-.isb-stack-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);white-space:nowrap}
-.isb-stack-badge-soon{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.isb-stack-why{margin:0;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
-.isb-stack-why-soon{opacity:.75}
+.isb-history-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.isb-history-title{font-size:14px;font-weight:650}
+.isb-empty{margin:24px 0;font-size:13px;color:var(--dsw-alias-label-secondary);text-align:center}
+.isb-notice{margin:0 0 10px;font-size:12px;color:var(--dsw-alias-state-warn-primary)}
+.isb-error{margin:0 0 10px;font-size:13px;color:var(--dsw-alias-state-error-primary)}
+.isb-project{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.isb-project-main{min-width:220px}
+.isb-project-title{display:flex;align-items:baseline;gap:8px}
+.isb-project-name{font-size:14px;font-weight:650}
+.isb-project-slug{font-size:11px;color:var(--dsw-alias-label-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.isb-project-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.isb-badge{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.isb-badge-ok{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}
+.isb-badge-live{color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary)}
+.isb-project-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.isb-btn-sm{padding:5px 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:12px;cursor:pointer;text-decoration:none}
+.isb-btn-sm:hover{border-color:var(--dsw-alias-brand-primary)}
+.isb-btn-sm:disabled{opacity:.4;cursor:not-allowed}
+.isb-btn-link{display:inline-block}
+.isb-confirm{display:inline-flex;gap:6px;align-items:center}
+.isb-btn-danger{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}
 @media (max-width:720px){.isb-advanced-grid{grid-template-columns:1fr}}
 `);
     }

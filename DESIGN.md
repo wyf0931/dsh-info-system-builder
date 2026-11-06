@@ -101,6 +101,8 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 - **步骤条**只描述"接下来会发生什么"，不制造填写负担：只有第 1 步需要用户输入。
 - **高级选项**默认折叠：模块上限（≤6）、字段上限（≤15/模块）、输出目录——初阶用户永远不用打开它。
 - **一键开启会话（无复制粘贴）**：把需求 + 选项组装成结构化 kickoff prompt，点击「开始生成会话」后**直接在宿主内启动流程**——优先通过 `uiWorkspace.connectWorkspace()` + `sessions.binding(id).session.prompt()` 创建会话并自动发送；若 Remote 通道不可用则回退为 `startSession({ prompt })`，把内容预填进输入框（仍无需复制）。
+
+**双 Tab（2026-11-07）**：`新建系统` 与 `历史项目`。历史项目通过 Host 路由（`webServer.register`）读取所有已注册 workspace 的 `info-systems/`：列表、启动/停止预览、下载（tar.gz）、打开文件夹（macOS `open -R` / Linux `xdg-open`）、复制路径、删除。路由带路径穿越防护（slug 白名单 + workspace 归属校验）。页面根容器自带滚动（`height:100%; overflow-y:auto`），窄窗口不再裁切。UI 同步精简：移除四步条、折叠「AI 自动完成」与技术栈为一行说明。
 - 视觉：全部走 `--dsw-alias-*` 主题 token，跟随明暗主题；class 前缀 `isb-`。
 
 ### 5.1 语言与主题（2026-11-06 修正）
@@ -120,7 +122,7 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 ## 7. 路线图
 
 - **v1（本版）**：Flask-Admin renderer + 向导页（需求工作台/示例/默认值/一键开启会话）+ ISD schema。
-- **v1.x**：一键开启会话（已完成）；`tool.call.toolview` 渲染工具专属结果卡片；蓝图 projection → wire.view 页面实时可视化。
+- **v1.x**：一键开启会话（已完成）；历史项目 Tab 与项目管理（已完成）；`tool.call.toolview` 渲染工具专属结果卡片；蓝图 projection → wire.view 页面实时可视化。
 - **v2**：多 renderer（fastapi-sqladmin / nextjs-prisma / vue-vite）；lark 文本 DSL 前端（`.isd` → 同一棵 ISD AST）；渲染产物自检（py_compile）。
 
 ## 8. 实测记录与运维知识（2026-11-06）

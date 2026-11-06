@@ -11,10 +11,16 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import net from 'node:net';
+import fs from 'node:fs';
 import path from 'node:path';
 import { validateAndNormalize, renderFlaskAdmin, IsdValidationError } from './render/flask_admin.js';
 
 export const inject = ['tools', 'fs', 'sessions'];
+
+/** Live preview processes, keyed by `<workspacePath>::<slug>`. */
+const previews = new Map();
 
 const TOOL_DESCRIPTION = `Render an Info System Definition (ISD) into a complete, runnable Flask-Admin + SQLite project.
 
@@ -73,6 +79,256 @@ const OUTPUT_SCHEMA = {
 
 export function apply(ctx) {
   ctx.effect(() => ctx.tools.register(makeRenderTool(ctx)), 'info-system-builder: register info_system_render');
+
+  // Project-management HTTP routes for the wizard panel. Both services are
+  // optional: profiles without a web server or workspace registry keep only
+  // the render tool.
+  ctx.inject(['webServer', 'workspaceRegistry'], (scope) => {
+    const disposers = registerProjectRoutes(scope);
+    return () => {
+      for (const dispose of disposers) dispose();
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Project management routes                                                   */
+/* -------------------------------------------------------------------------- */
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+const ROUTE_PREFIX = '/info-system-builder/';
+
+/**
+ * Register the panel's project routes on the web server.
+ * @param {object} ctx - a context holding webServer + workspaceRegistry.
+ * @returns {Array<() => void>} route disposers.
+ */
+function registerProjectRoutes(ctx) {
+  const server = ctx.webServer;
+  const registry = ctx.workspaceRegistry;
+
+  const handler = async (req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    const route = url.pathname.slice(ROUTE_PREFIX.length);
+    try {
+      if (route === 'projects' && req.method === 'GET') {
+        return json(res, 200, { projects: listProjects(registry) });
+      }
+      if (route === 'delete' && req.method === 'POST') {
+        const body = await readJson(req);
+        const root = resolveProjectRoot(registry, body.workspacePath, body.slug);
+        stopPreview(registry, body.workspacePath, body.slug);
+        fs.rmSync(root, { recursive: true, force: true });
+        return json(res, 200, { ok: true });
+      }
+      if (route === 'download' && req.method === 'GET') {
+        const slug = url.searchParams.get('slug');
+        const workspacePath = url.searchParams.get('workspacePath');
+        const root = resolveProjectRoot(registry, workspacePath, slug);
+        const sourceDir = fs.existsSync(path.join(root, 'project')) ? path.join(root, 'project') : root;
+        res.writeHead(200, {
+          'content-type': 'application/gzip',
+          'content-disposition': `attachment; filename="${slug}.tar.gz"`,
+          'cache-control': 'no-store',
+        });
+        const tar = spawn('tar', ['-czf', '-', '-C', sourceDir, '.']);
+        tar.stdout.pipe(res);
+        tar.on('error', () => { try { res.end(); } catch { /* closed */ } });
+        return undefined;
+      }
+      if (route === 'preview/start' && req.method === 'POST') {
+        const body = await readJson(req);
+        const root = resolveProjectRoot(registry, body.workspacePath, body.slug);
+        const projectDir = path.join(root, 'project');
+        if (!fs.existsSync(path.join(projectDir, 'app.py'))) {
+          return json(res, 400, { ok: false, error: 'project has not been rendered yet' });
+        }
+        const port = await freePort();
+        const child = spawn('uv', ['run', 'python', 'run.py', '--port', String(port)], {
+          cwd: projectDir,
+          stdio: 'ignore',
+          detached: false,
+        });
+        const key = previewKey(body.workspacePath, body.slug);
+        const entry = { child, port };
+        previews.set(key, entry);
+        child.on('exit', () => {
+          const current = previews.get(key);
+          if (current && current.child === child) previews.delete(key);
+        });
+        return json(res, 200, { ok: true, port, url: `http://127.0.0.1:${port}/admin/` });
+      }
+      if (route === 'preview/stop' && req.method === 'POST') {
+        const body = await readJson(req);
+        stopPreview(registry, body.workspacePath, body.slug);
+        return json(res, 200, { ok: true });
+      }
+      if (route === 'reveal' && req.method === 'POST') {
+        const body = await readJson(req);
+        const root = resolveProjectRoot(registry, body.workspacePath, body.slug);
+        const target = body.target === 'isd' ? path.join(root, 'system.isd.json') : path.join(root, 'project');
+        const existing = fs.existsSync(target) ? target : root;
+        const platform = process.platform;
+        const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'explorer' : 'xdg-open';
+        const args = platform === 'darwin' ? ['-R', existing] : [existing];
+        try {
+          spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+        } catch {
+          // Non-fatal: the UI also shows the path for manual opening.
+        }
+        return json(res, 200, { ok: true, path: existing });
+      }
+      return json(res, 404, { ok: false, error: 'unknown route' });
+    } catch (error) {
+      return json(res, 400, { ok: false, error: String(error && error.message ? error.message : error) });
+    }
+  };
+
+  const route = { kind: 'prefix', path: ROUTE_PREFIX, handler };
+  return [server.register(route)];
+}
+
+function previewKey(workspacePath, slug) {
+  return `${workspacePath}::${slug}`;
+}
+
+function stopPreview(registry, workspacePath, slug) {
+  const key = previewKey(workspacePath, slug);
+  const entry = previews.get(key);
+  if (!entry) return;
+  try {
+    entry.child.kill('SIGTERM');
+  } catch {
+    // already gone
+  }
+  previews.delete(key);
+}
+
+/**
+ * List every generated information system across registered workspaces.
+ * Reads only `<workspace>/info-systems/<slug>/` and never creates anything.
+ */
+function listProjects(registry) {
+  const projects = [];
+  let workspaces = [];
+  try {
+    workspaces = registry.list();
+  } catch {
+    return projects;
+  }
+  for (const workspace of workspaces) {
+    const root = path.join(workspace.path, 'info-systems');
+    let entries;
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !SLUG_RE.test(entry.name)) continue;
+      const slug = entry.name;
+      const dir = path.join(root, slug);
+      const isdPath = path.join(dir, 'system.isd.json');
+      const projectDir = path.join(dir, 'project');
+      let name = slug;
+      let moduleCount = 0;
+      let fieldCount = 0;
+      let updatedAt = 0;
+      try {
+        const isd = JSON.parse(fs.readFileSync(isdPath, 'utf8'));
+        name = isd?.project?.name || slug;
+        moduleCount = Array.isArray(isd.modules) ? isd.modules.length : 0;
+        fieldCount = Array.isArray(isd.modules)
+          ? isd.modules.reduce((sum, module) => sum + (Array.isArray(module.fields) ? module.fields.length : 0), 0)
+          : 0;
+        updatedAt = fs.statSync(isdPath).mtimeMs;
+      } catch {
+        // ISD missing or unreadable — still list the directory.
+      }
+      const rendered = fs.existsSync(path.join(projectDir, 'app.py'));
+      const preview = previews.get(previewKey(workspace.path, slug));
+      projects.push({
+        slug,
+        name,
+        workspace: workspace.title || path.basename(workspace.path),
+        workspacePath: workspace.path,
+        projectDir,
+        isdPath,
+        rendered,
+        moduleCount,
+        fieldCount,
+        updatedAt,
+        preview: preview ? { port: preview.port, url: `http://127.0.0.1:${preview.port}/admin/` } : null,
+      });
+    }
+  }
+  projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return projects;
+}
+
+/**
+ * Resolve `<workspace>/info-systems/<slug>` after validating both inputs.
+ * @throws when the workspace is unregistered, the slug is malformed, or the
+ * resolved path escapes the workspace's info-systems directory.
+ */
+function resolveProjectRoot(registry, workspacePath, slug) {
+  if (typeof slug !== 'string' || !SLUG_RE.test(slug)) throw new Error('invalid project slug');
+  let workspaces = [];
+  try {
+    workspaces = registry.list();
+  } catch {
+    throw new Error('workspace registry unavailable');
+  }
+  const known = workspaces.some((workspace) => workspace.path === workspacePath);
+  if (!known) throw new Error('unknown workspace');
+  const infoRoot = path.join(workspacePath, 'info-systems');
+  const target = path.resolve(infoRoot, slug);
+  if (target !== path.join(infoRoot, slug)) throw new Error('path escapes the info-systems directory');
+  if (!fs.existsSync(target)) throw new Error('project not found');
+  return target;
+}
+
+/** First free loopback port. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = address && typeof address === 'object' ? address.port : 0;
+      server.close(() => (port ? resolve(port) : reject(new Error('could not allocate a port'))));
+    });
+  });
+}
+
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > 1_000_000) {
+        reject(new Error('request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {});
+      } catch (error) {
+        reject(new Error(`invalid JSON body: ${String(error)}`));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function json(res, status, value) {
+  const body = JSON.stringify(value);
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(body);
 }
 
 function makeRenderTool(ctx) {
