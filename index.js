@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validateAndNormalize, renderFlaskAdmin, IsdValidationError } from './render/flask_admin.js';
 
-export const inject = ['tools', 'fs', 'sessions'];
+export const inject = ['tools', 'fs', 'sessions', 'webServer', 'workspaceRegistry'];
 
 /** Live preview processes, keyed by `<workspacePath>::<slug>`. */
 const previews = new Map();
@@ -80,15 +80,15 @@ const OUTPUT_SCHEMA = {
 export function apply(ctx) {
   ctx.effect(() => ctx.tools.register(makeRenderTool(ctx)), 'info-system-builder: register info_system_render');
 
-  // Project-management HTTP routes for the wizard panel. Both services are
-  // optional: profiles without a web server or workspace registry keep only
-  // the render tool.
-  ctx.inject(['webServer', 'workspaceRegistry'], (scope) => {
-    const disposers = registerProjectRoutes(scope);
+  // Project-management HTTP routes for the wizard panel.
+  ctx.effect(() => {
+    const disposers = registerProjectRoutes(ctx);
+    console.log('[info-system-builder] project routes registered:',
+      disposers.length, 'routes');
     return () => {
       for (const dispose of disposers) dispose();
     };
-  });
+  }, 'info-system-builder: register project routes');
 }
 
 /* -------------------------------------------------------------------------- */
@@ -184,8 +184,19 @@ function registerProjectRoutes(ctx) {
     }
   };
 
-  const route = { kind: 'prefix', path: ROUTE_PREFIX, handler };
-  return [server.register(route)];
+  const paths = [
+    'projects', 'delete', 'download', 'preview/start', 'preview/stop', 'reveal',
+  ];
+  const routes = paths.map((path) => ({ kind: 'exact', path: ROUTE_PREFIX + path, handler }));
+  const disposers = [];
+  for (const route of routes) {
+    try {
+      disposers.push(server.register(route));
+    } catch (error) {
+      console.error('[info-system-builder] failed to register route', route.path, error);
+    }
+  }
+  return disposers;
 }
 
 function previewKey(workspacePath, slug) {

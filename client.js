@@ -189,8 +189,12 @@ window.__ModuleLoader__.load({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body || {}),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+      const text = await response.text().catch(() => '');
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { /* non-JSON body */ }
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || `HTTP ${response.status}${text ? ' — ' + String(text).slice(0, 160) : ''}`);
+      }
       return data;
     }
 
@@ -370,7 +374,10 @@ window.__ModuleLoader__.load({
         setError(null);
         try {
           const response = await fetch('/info-system-builder/projects', { headers: { accept: 'application/json' } });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(`HTTP ${response.status}${detail ? ' — ' + String(detail).slice(0, 160) : ''}`);
+          }
           const data = await response.json();
           setProjects(Array.isArray(data.projects) ? data.projects : []);
         } catch (err) {
