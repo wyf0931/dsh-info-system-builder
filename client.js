@@ -4,8 +4,8 @@
  * Registers a sidebar panel entry + a main-panel wizard page: a guided cockpit
  * for turning one sentence into a running admin system. All styling goes
  * through --dsw-alias-* theme tokens (class prefix `isb-`), component-local
- * so unmounting removes it. Text is routed through the Client locale service
- * when available, with a built-in zh/en fallback.
+ * so unmounting removes it. Text is bilingual (zh/en), follows the DSH locale
+ * service, defaults to Chinese, and stays readable in both themes.
  */
 
 window.__ModuleLoader__.load({
@@ -14,89 +14,152 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
 
-    const ZH = {
-      tagline: '从一句话到可运行的管理系统',
-      step1: '描述需求', step2: '蓝图设计', step3: '选择技术栈', step4: '生成运行',
-      heroTitle: '告诉我你要管什么',
-      heroHint: '一句话就够：谁在用、管什么东西、想记录和查什么。AI 会自动扩写成完整需求。',
-      examples: '试试这些例子',
-      examplesList: ['帮我做一个办公用品管理系统，登记领用和库存', '做一个简历跟踪系统，记录候选人面试进度', '设备资产登记系统，管理电脑和外设的领用归属'],
-      advanced: '高级选项（全部有默认值，可以不碰）',
-      advancedModules: '模块数上限',
-      advancedFields: '每模块字段数上限',
-      advancedDir: '输出目录（留空使用默认）',
-      generateBtn: '生成启动指令',
-      copyBtn: '复制指令',
-      copied: '已复制 ✓ 现在粘贴到下方对话发送',
-      promptTitle: '你的启动指令',
-      autoTitle: '接下来 AI 会自动完成',
-      auto1: '需求扩写：识别业务领域、使用者与核心场景',
-      auto2: '蓝图设计：划分模块、设计字段（类型/必填/可搜索/中文标签）',
-      auto3: '写出 system.isd.json 定义文件，展示蓝图后直接渲染项目',
-      confirmHint: '想改蓝图？任何时候直接说"把 XX 模块加个字段"，AI 改完定义文件重新渲染即可。',
-      stacksTitle: '实现技术栈',
-      recommended: '推荐 · 默认',
-      soon: '即将支持',
-      whyDefault: '单命令启动（uv run）· 自带 SQLite · 中文界面 · 傻瓜式部署',
-      isdTitle: 'ISD 定义文件速览（懂技术的你可以直接编辑它）',
-      isdHint: '渲染工具把它当作"定制化语法文件"解析：改完重新渲染即可，幂等无副作用。',
+    /* ------------------------------------------------------------------ */
+    /* Dictionaries                                                       */
+    /* ------------------------------------------------------------------ */
+    const DICT = {
+      zh: {
+        'app.title': '信息系统生成器',
+        'app.tagline': '从一句话到可运行的管理系统',
+        'step.describe': '描述需求',
+        'step.blueprint': '蓝图设计',
+        'step.stack': '选择技术栈',
+        'step.run': '生成运行',
+        'hero.title': '告诉我你要管什么',
+        'hero.hint': '一句话就够：谁在用、管什么东西、想记录和查什么。AI 会自动扩写成完整需求。',
+        'hero.examples': '试试这些例子',
+        'example.office': '帮我做一个办公用品管理系统，登记领用和库存',
+        'example.resume': '做一个简历跟踪系统，记录候选人面试进度',
+        'example.asset': '设备资产登记系统，管理电脑和外设的领用归属',
+        'advanced.title': '高级选项（全部有默认值，可以不碰）',
+        'advanced.modules': '模块数上限',
+        'advanced.fields': '每模块字段数上限',
+        'advanced.dir': '输出目录（留空使用默认）',
+        'advanced.dirPlaceholder': 'info-systems/<slug>/',
+        'actions.generate': '生成启动指令',
+        'actions.copy': '复制指令',
+        'actions.copied': '已复制 ✓ 现在粘贴到下方对话发送',
+        'prompt.title': '你的启动指令',
+        'auto.title': '接下来 AI 会自动完成',
+        'auto.1': '需求扩写：识别业务领域、使用者与核心场景',
+        'auto.2': '蓝图设计：划分模块、设计字段（类型/必填/可搜索/中文标签）',
+        'auto.3': '写出 system.isd.json 定义文件，展示蓝图后直接渲染项目',
+        'auto.confirmHint': '想改蓝图？任何时候直接说"把 XX 模块加个字段"，AI 改完定义文件重新渲染即可。',
+        'stacks.title': '实现技术栈',
+        'stacks.recommended': '推荐 · 默认',
+        'stacks.soon': '即将支持',
+        'stacks.why': '单命令启动（uv run）· 自带 SQLite · 中文界面 · 傻瓜式部署',
+        'stacks.fastapi': 'SQLAdmin + uvicorn',
+        'stacks.nextjs': 'Prisma + SQLite',
+        'stacks.vue': 'Vite + Element Plus',
+        'isd.title': 'ISD 定义文件速览（懂技术的你可以直接编辑它）',
+        'isd.hint': '渲染工具把它当作"定制化语法文件"解析：改完重新渲染即可，幂等无副作用。',
+        'isd.types': '# 字段类型: string / text / integer / float / boolean / date / time / datetime',
+        'kickoff.intro': '请帮我生成一个内部信息系统。',
+        'kickoff.requirement': '需求',
+        'kickoff.conventions': '约定：',
+        'kickoff.stack': '实现栈：Flask-Admin + SQLite（默认）',
+        'kickoff.modules': '模块数上限',
+        'kickoff.fields': '每模块字段上限',
+        'kickoff.dir': '输出目录',
+        'kickoff.blueprint': '请先设计 ISD 蓝图并写入 system.isd.json，展示蓝图概要，然后用 info_system_render 渲染项目并给出启动命令。',
+      },
+      en: {
+        'app.title': 'Info System Builder',
+        'app.tagline': 'From one sentence to a running admin system',
+        'step.describe': 'Describe',
+        'step.blueprint': 'Blueprint',
+        'step.stack': 'Stack',
+        'step.run': 'Generate & run',
+        'hero.title': 'Tell me what you need to manage',
+        'hero.hint': 'One sentence is enough: who uses it, what it tracks, what you search. AI expands it into full requirements.',
+        'hero.examples': 'Try an example',
+        'example.office': 'Build an office-supply system to track usage and stock',
+        'example.resume': 'A resume tracker that follows candidates through interviews',
+        'example.asset': 'An asset register for laptops and peripherals',
+        'advanced.title': 'Advanced (all defaults, safe to skip)',
+        'advanced.modules': 'Max modules',
+        'advanced.fields': 'Max fields per module',
+        'advanced.dir': 'Output directory (blank = default)',
+        'advanced.dirPlaceholder': 'info-systems/<slug>/',
+        'actions.generate': 'Generate kickoff prompt',
+        'actions.copy': 'Copy prompt',
+        'actions.copied': 'Copied ✓ now paste it into the chat below',
+        'prompt.title': 'Your kickoff prompt',
+        'auto.title': 'AI then does automatically',
+        'auto.1': 'Expands the requirement: domain, users, key scenarios',
+        'auto.2': 'Designs the blueprint: modules + fields (types/required/searchable/labels)',
+        'auto.3': 'Writes system.isd.json, shows the blueprint, renders the project',
+        'auto.confirmHint': 'Want changes? Just say "add a field to XX" any time — AI edits the ISD and re-renders.',
+        'stacks.title': 'Implementation stack',
+        'stacks.recommended': 'Recommended · default',
+        'stacks.soon': 'Coming soon',
+        'stacks.why': 'One-command start (uv run) · bundled SQLite · localized UI',
+        'stacks.fastapi': 'SQLAdmin + uvicorn',
+        'stacks.nextjs': 'Prisma + SQLite',
+        'stacks.vue': 'Vite + Element Plus',
+        'isd.title': 'ISD definition at a glance (technical users can edit it)',
+        'isd.hint': 'The render tool parses it as a custom syntax file: edit and re-render, idempotent.',
+        'isd.types': '# field types: string / text / integer / float / boolean / date / time / datetime',
+        'kickoff.intro': 'Please build me an internal information system.',
+        'kickoff.requirement': 'Requirement',
+        'kickoff.conventions': 'Conventions:',
+        'kickoff.stack': 'Stack: Flask-Admin + SQLite (default)',
+        'kickoff.modules': 'Max modules',
+        'kickoff.fields': 'Max fields per module',
+        'kickoff.dir': 'Output dir',
+        'kickoff.blueprint': 'Design the ISD blueprint into system.isd.json first, show a summary, then render with info_system_render and give the start command.',
+      },
     };
 
-    const EN = {
-      tagline: 'From one sentence to a running admin system',
-      step1: 'Describe', step2: 'Blueprint', step3: 'Stack', step4: 'Generate & run',
-      heroTitle: 'Tell me what you need to manage',
-      heroHint: 'One sentence is enough: who uses it, what it tracks, what you search. AI expands it into full requirements.',
-      examples: 'Try an example',
-      examplesList: [
-        'Build an office-supply system to track usage and stock',
-        'A resume tracker that follows candidates through interviews',
-        'An asset register for laptops and peripherals',
-      ],
-      advanced: 'Advanced (all defaults, safe to skip)',
-      advancedModules: 'Max modules',
-      advancedFields: 'Max fields per module',
-      advancedDir: 'Output directory (blank = default)',
-      generateBtn: 'Generate kickoff prompt',
-      copyBtn: 'Copy prompt',
-      copied: 'Copied ✓ now paste it into the chat below',
-      promptTitle: 'Your kickoff prompt',
-      autoTitle: 'AI then does automatically',
-      auto1: 'Expands the requirement: domain, users, key scenarios',
-      auto2: 'Designs the blueprint: modules + fields (types/required/searchable/labels)',
-      auto3: 'Writes system.isd.json, shows the blueprint, renders the project',
-      confirmHint: 'Want changes? Just say "add a field to XX" any time — AI edits the ISD and re-renders.',
-      stacksTitle: 'Implementation stack',
-      recommended: 'Recommended · default',
-      soon: 'Coming soon',
-      whyDefault: 'One-command start (uv run) · bundled SQLite · localized UI',
-      isdTitle: 'ISD definition at a glance (technical users can edit it)',
-      isdHint: 'The render tool parses it as a custom syntax file: edit and re-render, idempotent.',
-    };
-
-    /** Bilingual text source: locale service if present, else browser language. */
-    function makeTextSource(ctx) {
-      let dict = navigatorLanguageZh() ? ZH : EN;
-      let dispose = () => {};
+    /**
+     * Resolve the UI language: DSH locale service first (authoritative),
+     * then browser language, then the product default — Chinese.
+     *
+     * When the locale service is present but its snapshot shape is unfamiliar,
+     * default to Chinese rather than falling back to the browser: the host UI
+     * language is the better signal, and Chinese is this product's primary
+     * audience. Only an explicit English locale selects English.
+     */
+    function resolveLang(ctx) {
       try {
         const locale = ctx.get('locale');
-        if (locale && typeof locale.register === 'function') {
-          locale.register('info-system-builder', 'zh-CN', ZH);
-          locale.register('info-system-builder', 'en', EN);
+        if (locale && typeof locale.getLocale === 'function') {
+          const snap = locale.getLocale() || {};
+          const id = String(snap.id || snap.locale || snap.language || '').toLowerCase();
+          return id.startsWith('en') ? 'en' : 'zh';
         }
       } catch {
-        // Locale service optional; built-in dictionary already covers both.
+        // Optional service; fall through.
       }
-      const t = (key) => dict[key] ?? key;
-      t.dispose = () => dispose();
+      try {
+        const nav = (navigator.language || '').toLowerCase();
+        if (nav.startsWith('en')) return 'en';
+      } catch {
+        // Non-browser test environment.
+      }
+      return 'zh';
+    }
+
+    /** Text source: `t(key)` plus the resolved language code. */
+    function makeTextSource(ctx) {
+      const lang = resolveLang(ctx);
+      const dict = DICT[lang] || DICT.zh;
+      const t = (key) => dict[key] ?? DICT.zh[key] ?? key;
+      t.lang = lang;
       return t;
     }
 
-    function navigatorLanguageZh() {
+    /** Register this package's dictionaries with the DSH locale service. */
+    function registerLocale(ctx) {
       try {
-        return (navigator.language || '').toLowerCase().startsWith('zh');
+        const locale = ctx.get('locale');
+        if (locale && typeof locale.register === 'function') {
+          locale.register('info-system-builder', 'zh', DICT.zh);
+          locale.register('info-system-builder', 'en', DICT.en);
+        }
       } catch {
-        return true;
+        // Locale service optional; built-in dictionaries already cover both.
       }
     }
 
@@ -131,18 +194,16 @@ window.__ModuleLoader__.load({
 
       const buildPrompt = () => {
         const lines = [];
-        lines.push(navigatorLanguageZh() ? '请帮我生成一个内部信息系统。' : 'Please build me an internal information system.');
+        lines.push(t('kickoff.intro'));
         lines.push('');
-        lines.push(`${navigatorLanguageZh() ? '需求' : 'Requirement'}: ${requirement.trim()}`);
+        lines.push(`${t('kickoff.requirement')}: ${requirement.trim()}`);
         lines.push('');
-        lines.push(navigatorLanguageZh() ? '约定：' : 'Conventions:');
-        lines.push(`- ${navigatorLanguageZh() ? '实现栈' : 'Stack'}: Flask-Admin + SQLite (${navigatorLanguageZh() ? '默认' : 'default'})`);
-        lines.push(`- ${navigatorLanguageZh() ? '模块数上限' : 'Max modules'}: ${maxModules}`);
-        lines.push(`- ${navigatorLanguageZh() ? '每模块字段上限' : 'Max fields per module'}: ${maxFields}`);
-        if (outputDir.trim()) lines.push(`- ${navigatorLanguageZh() ? '输出目录' : 'Output dir'}: ${outputDir.trim()}`);
-        lines.push(`- ${navigatorLanguageZh()
-          ? '请先设计 ISD 蓝图并写入 system.isd.json，展示蓝图概要，然后用 info_system_render 渲染项目并给出启动命令。'
-          : 'Design the ISD blueprint into system.isd.json first, show a summary, then render with info_system_render and give the start command.'}`);
+        lines.push(t('kickoff.conventions'));
+        lines.push(`- ${t('kickoff.stack')}`);
+        lines.push(`- ${t('kickoff.modules')}: ${maxModules}`);
+        lines.push(`- ${t('kickoff.fields')}: ${maxFields}`);
+        if (outputDir.trim()) lines.push(`- ${t('kickoff.dir')}: ${outputDir.trim()}`);
+        lines.push(`- ${t('kickoff.blueprint')}`);
         return lines.join('\n');
       };
 
@@ -168,27 +229,29 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const stepLabels = [t('step.describe'), t('step.blueprint'), t('step.stack'), t('step.run')];
+
       return h('div', { className: 'isb-root' },
         h(Style, null),
         // Header
         h('div', { className: 'isb-header' },
           h('div', { className: 'isb-header-icon' }, h(PanelIcon, { size: 26, active: true })),
           h('div', null,
-            h('h1', { className: 'isb-title' }, navigatorLanguageZh() ? '信息系统生成器' : 'Info System Builder'),
-            h('p', { className: 'isb-tagline' }, t('tagline')))),
+            h('h1', { className: 'isb-title' }, t('app.title')),
+            h('p', { className: 'isb-tagline' }, t('app.tagline')))),
         // Steps rail
         h('div', { className: 'isb-steps' },
-          [t('step1'), t('step2'), t('step3'), t('step4')].map((label, i) =>
+          stepLabels.map((label, i) =>
             h('div', { key: label, className: 'isb-step' + (i === 0 ? ' isb-step-current' : '') },
               h('span', { className: 'isb-step-num' }, String(i + 1)),
               h('span', { className: 'isb-step-label' }, label)))),
         // Requirement workbench
         h('section', { className: 'isb-card' },
-          h('h2', { className: 'isb-card-title' }, t('heroTitle')),
-          h('p', { className: 'isb-card-hint' }, t('heroHint')),
+          h('h2', { className: 'isb-card-title' }, t('hero.title')),
+          h('p', { className: 'isb-card-hint' }, t('hero.hint')),
           h('div', { className: 'isb-chip-row' },
-            h('span', { className: 'isb-chip-label' }, t('examples')),
-            t('examplesList').map((example, i) =>
+            h('span', { className: 'isb-chip-label' }, t('hero.examples')),
+            [t('example.office'), t('example.resume'), t('example.asset')].map((example, i) =>
               h('button', {
                 key: i, className: 'isb-chip', type: 'button',
                 onClick: () => { setRequirement(example); setPrompt(null); },
@@ -196,82 +259,82 @@ window.__ModuleLoader__.load({
           h('textarea', {
             className: 'isb-input',
             value: requirement,
-            placeholder: t('examplesList')[0],
+            placeholder: t('example.office'),
             onChange: (e) => { setRequirement(e.target.value); setPrompt(null); },
           }),
           h('details', { className: 'isb-advanced' },
-            h('summary', null, t('advanced')),
+            h('summary', null, t('advanced.title')),
             h('div', { className: 'isb-advanced-grid' },
               h('label', { className: 'isb-advanced-item' },
-                h('span', null, t('advancedModules')),
+                h('span', null, t('advanced.modules')),
                 h('select', {
                   value: maxModules,
                   className: 'isb-select',
                   onChange: (e) => setMaxModules(Number(e.target.value)),
                 }, [3, 4, 5, 6, 8, 10].map((n) => h('option', { key: n, value: n }, String(n))))),
               h('label', { className: 'isb-advanced-item' },
-                h('span', null, t('advancedFields')),
+                h('span', null, t('advanced.fields')),
                 h('select', {
                   value: maxFields,
                   className: 'isb-select',
                   onChange: (e) => setMaxFields(Number(e.target.value)),
                 }, [8, 10, 12, 15, 20, 25].map((n) => h('option', { key: n, value: n }, String(n))))),
               h('label', { className: 'isb-advanced-item isb-advanced-item-wide' },
-                h('span', null, t('advancedDir')),
+                h('span', null, t('advanced.dir')),
                 h('input', {
                   className: 'isb-text',
                   value: outputDir,
                   onChange: (e) => setOutputDir(e.target.value),
-                  placeholder: 'info-systems/<slug>/',
+                  placeholder: t('advanced.dirPlaceholder'),
                 })))),
           h('div', { className: 'isb-actions' },
             h('button', {
               className: 'isb-btn-primary', type: 'button', disabled: !requirement.trim(),
               onClick: onGenerate,
-            }, t('generateBtn')),
+            }, t('actions.generate')),
             prompt && h('button', { className: 'isb-btn-ghost', type: 'button', onClick: onCopy },
-              copied ? t('copied') : t('copyBtn'))),
+              copied ? t('actions.copied') : t('actions.copy'))),
           prompt && h('div', { className: 'isb-prompt' },
-            h('div', { className: 'isb-prompt-head' }, t('promptTitle')),
+            h('div', { className: 'isb-prompt-head' }, t('prompt.title')),
             h('pre', { className: 'isb-pre' }, prompt))),
         // What AI does automatically
         h('section', { className: 'isb-card' },
-          h('h2', { className: 'isb-card-title' }, t('autoTitle')),
+          h('h2', { className: 'isb-card-title' }, t('auto.title')),
           h('ul', { className: 'isb-auto-list' },
-            h('li', null, t('auto1')),
-            h('li', null, t('auto2')),
-            h('li', null, t('auto3'))),
-          h('p', { className: 'isb-confirm-hint' }, t('confirmHint'))),
+            h('li', null, t('auto.1')),
+            h('li', null, t('auto.2')),
+            h('li', null, t('auto.3'))),
+          h('p', { className: 'isb-confirm-hint' }, t('auto.confirmHint'))),
         // Stacks
         h('section', { className: 'isb-card' },
-          h('h2', { className: 'isb-card-title' }, t('stacksTitle')),
+          h('h2', { className: 'isb-card-title' }, t('stacks.title')),
           h('div', { className: 'isb-stacks' },
             h('div', { className: 'isb-stack isb-stack-active' },
               h('div', { className: 'isb-stack-head' },
                 h('span', { className: 'isb-stack-name' }, 'Flask-Admin'),
-                h('span', { className: 'isb-stack-badge' }, t('recommended'))),
-              h('p', { className: 'isb-stack-why' }, t('whyDefault'))),
+                h('span', { className: 'isb-stack-badge' }, t('stacks.recommended'))),
+              h('p', { className: 'isb-stack-why' }, t('stacks.why'))),
             h('div', { className: 'isb-stack' },
               h('div', { className: 'isb-stack-head' },
                 h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'FastAPI'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, 'SQLAdmin + uvicorn')),
+                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
+              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.fastapi'))),
             h('div', { className: 'isb-stack' },
               h('div', { className: 'isb-stack-head' },
                 h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'Next.js'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, 'Prisma + SQLite')),
+                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
+              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.nextjs'))),
             h('div', { className: 'isb-stack' },
               h('div', { className: 'isb-stack-head' },
                 h('span', { className: 'isb-stack-name isb-stack-soon-name' }, 'Vue'),
-                h('span', { className: 'isb-stack-badge-soon' }, t('soon'))),
-              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, 'Vite + Element Plus')))),
+                h('span', { className: 'isb-stack-badge-soon' }, t('stacks.soon'))),
+              h('p', { className: 'isb-stack-why isb-stack-why-soon' }, t('stacks.vue'))))),
         // ISD spec
         h('section', { className: 'isb-card' },
           h('details', null,
-            h('summary', { className: 'isb-card-title isb-summary-title' }, t('isdTitle')),
-            h('p', { className: 'isb-card-hint' }, t('isdHint')),
-            h('pre', { className: 'isb-pre isd-pre' }, ISD_EXAMPLE))));
+            h('summary', { className: 'isb-card-title isb-summary-title' }, t('isd.title')),
+            h('p', { className: 'isb-card-hint' }, t('isd.hint')),
+            h('pre', { className: 'isb-pre isd-pre' }, ISD_EXAMPLE + '\n' + t('isd.types')))));
     }
 
     const ISD_EXAMPLE = `{
@@ -286,10 +349,12 @@ window.__ModuleLoader__.load({
         { "name": "stock", "label": "库存数量", "type": "integer", "required": true }
       ] }
   ]
-}
-# 字段类型: string / text / integer / float / boolean / date / time / datetime`;
+}`;
 
-    /* Component-local stylesheet: unmounting the page removes it. */
+    /* Component-local stylesheet: unmounting the page removes it.
+       Foreground colors on filled controls use --dsw-alias-bg-base, so the
+       text always contrasts with --dsw-alias-brand-primary in both themes
+       (light: white on blue; dark: dark on light). Never hardcode a literal white colour. */
     function Style() {
       return h('style', null, `
 .isb-root{max-width:880px;margin:0 auto;padding:28px 24px 64px;color:var(--dsw-alias-label-primary)}
@@ -308,8 +373,8 @@ window.__ModuleLoader__.load({
 .isb-card-hint{margin:0 0 14px;font-size:13px;color:var(--dsw-alias-label-secondary);line-height:1.6}
 .isb-chip-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
 .isb-chip-label{font-size:12px;color:var(--dsw-alias-label-secondary);margin-right:2px}
-.isb-chip{padding:5px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:12px;cursor:pointer;transition:border-color .15s}
-.isb-chip:hover{border-color:var(--dsw-alias-brand-primary)}
+.isb-chip{padding:5px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:12px;cursor:pointer;transition:border-color .15s,background .15s}
+.isb-chip:hover{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}
 .isb-input{width:100%;box-sizing:border-box;min-height:96px;padding:10px 12px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;resize:vertical;outline:none}
 .isb-input:focus{border-color:var(--dsw-alias-brand-primary)}
 .isb-advanced{margin-top:12px;font-size:13px}
@@ -318,10 +383,11 @@ window.__ModuleLoader__.load({
 .isb-advanced-item{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .isb-select,.isb-text{padding:7px 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;outline:none}
 .isb-select:focus,.isb-text:focus{border-color:var(--dsw-alias-brand-primary)}
-.isb-actions{display:flex;gap:10px;margin-top:16px}
-.isb-btn-primary{padding:9px 18px;border-radius:10px;border:none;background:var(--dsw-alias-brand-primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+.isb-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.isb-btn-primary{padding:9px 18px;border-radius:10px;border:none;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-size:13px;font-weight:600;cursor:pointer}
 .isb-btn-primary:disabled{opacity:.45;cursor:not-allowed}
 .isb-btn-ghost{padding:9px 16px;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:13px;cursor:pointer}
+.isb-btn-ghost:hover{background:var(--dsw-alias-bg-layer-2)}
 .isb-prompt{margin-top:16px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden}
 .isb-prompt-head{padding:8px 12px;font-size:12px;font-weight:600;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
 .isb-pre{margin:0;padding:12px;background:var(--dsw-alias-bg-layer-2);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary)}
@@ -331,11 +397,11 @@ window.__ModuleLoader__.load({
 .isb-stacks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
 .isb-stack{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:12px 14px;background:var(--dsw-alias-bg-layer-2)}
 .isb-stack-active{border-color:var(--dsw-alias-brand-primary)}
-.isb-stack-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.isb-stack-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .isb-stack-name{font-size:13px;font-weight:650}
 .isb-stack-soon-name{color:var(--dsw-alias-label-secondary)}
-.isb-stack-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--dsw-alias-brand-primary);color:#fff}
-.isb-stack-badge-soon{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.isb-stack-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);white-space:nowrap}
+.isb-stack-badge-soon{font-size:10px;padding:2px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .isb-stack-why{margin:0;font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
 .isb-stack-why-soon{opacity:.75}
 @media (max-width:720px){.isb-advanced-grid{grid-template-columns:1fr}}
@@ -345,6 +411,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       apply(ctx) {
+        registerLocale(ctx);
         const t = makeTextSource(ctx);
         ctx.effect(() => {
           const disposeIcon = ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
@@ -352,7 +419,7 @@ window.__ModuleLoader__.load({
               name: 'sidebar.panellist',
               id: 'info-system-builder',
               order: 20,
-              label: navigatorLanguageZh() ? '信息系统生成器' : 'Info System Builder',
+              label: t('app.title'),
             },
             PanelIcon,
           ));

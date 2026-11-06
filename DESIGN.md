@@ -103,6 +103,12 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 - **启动指令生成器**：把需求 + 选项组装成一段结构化 prompt，一键复制，粘贴到对话即启动全流程（v1 通道；v2 演进为页面直发会话）。
 - 视觉：全部走 `--dsw-alias-*` 主题 token，跟随明暗主题；class 前缀 `isb-`。
 
+### 5.1 语言与主题（2026-11-06 修正）
+
+**语言（i18n）**：优先跟随 **DSH locale 服务**（即宿主界面语言）；locale 服务存在但快照结构未知时**默认中文**（产品主要受众），仅在明确 `en` 时用英文；无 locale 服务时退化到浏览器语言，最终兜底中文。全部文案收敛进 `DICT.zh` / `DICT.en` 字典并通过 `locale.register('info-system-builder', 'zh'|'en', dict)` 注册；不再按 `navigator.language` 硬切换（此前导致中文界面下显示英文）。
+
+**主题对比度**：填充控件（primary 按钮、推荐徽章、步骤圆点）的前景色一律用 `--dsw-alias-bg-base`（与 `--dsw-alias-brand-primary` 背景相反：浅色主题白字蓝底 / 深色主题深字浅底），**禁止硬编码白色**；chips 改为透明底 + 描边。此前 dark 模式下品牌色是浅色，白底白字导致按钮文案不可见。
+
 ## 6. Agent 侧 SOP（由工具 description + 本文档引导）
 
 1. 听到"做个系统/管理 XX"类需求 →（若信息太粗，先用 `ask_user_question` 一次问清关键缺失项，可跳过）。
