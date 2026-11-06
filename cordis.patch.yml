@@ -1,0 +1,3 @@
+- insert:
+    - id: info-system-builder
+      name: '@local/info-system-builder'

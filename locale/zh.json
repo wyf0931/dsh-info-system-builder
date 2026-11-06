@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "信息系统生成器",
+    "description": "从一句话需求生成可运行的 Flask-Admin + SQLite 内部信息系统：AI 设计 ISD 蓝图，确定性渲染成项目，默认栈开箱即用。"
+  }
+}

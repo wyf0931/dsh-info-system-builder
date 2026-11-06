@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Info System Builder",
+    "description": "Generate a runnable Flask-Admin + SQLite internal information system from one sentence: AI designs the ISD blueprint, a deterministic renderer emits the project, defaults all the way."
+  }
+}

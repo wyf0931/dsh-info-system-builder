@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Node
+node_modules/
+
+# Test / tooling artifacts
+.playwright-cli/
+.uv-cache/
+playwright-report/
