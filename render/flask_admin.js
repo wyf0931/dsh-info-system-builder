@@ -407,6 +407,9 @@ function renderViews(isd) {
   out.push('class SecureAdminIndexView(AdminIndexView):');
   out.push('    """Dashboard home page, available only to logged-in users."""');
   out.push('');
+  out.push("    def __init__(self, name='概览', **kwargs):");
+  out.push('        super().__init__(name=name, **kwargs)');
+  out.push('');
   out.push('    def is_accessible(self):');
   out.push('        return current_user.is_authenticated');
   out.push('');
@@ -744,13 +747,7 @@ function renderDashboardPage(isd) {
   return `{% extends 'admin/master.html' %}
 
 {% block body %}
-<div class="container-fluid" style="padding-top:18px">
-  <div class="row" style="margin-bottom:18px">
-    <div class="col-md-12">
-      <h2 style="margin:0 0 4px">概览</h2>
-      <p style="color:#777;margin:0">欢迎回来，{{ user.username }}。这里是 ${name} 的业务概况。</p>
-    </div>
-  </div>
+<div class="container-fluid">
   <div class="row">
     {% for stat in stats %}
     <div class="col-md-4 col-sm-6">
