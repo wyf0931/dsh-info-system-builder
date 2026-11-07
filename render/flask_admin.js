@@ -323,6 +323,7 @@ DATABASE_URL=sqlite:///instance/app.db
 `;
 
   files['templates/login.html'] = renderLoginPage(isd, adminAccount, adminPassword);
+  files['templates/admin/index.html'] = renderDashboardPage(isd);
   files['README.md'] = renderReadme(isd, adminAccount, adminPassword);
 
   // The ISD itself is part of the deliverable: the user's editable source of truth.
@@ -385,21 +386,37 @@ function renderViews(isd) {
   const out = [];
   out.push(`"""Flask-Admin views for ${isd.project.name}."""`);
   out.push('');
-  out.push('from flask import redirect, request, url_for');
-  out.push('from flask_admin import AdminIndexView');
+  out.push('from flask import redirect, render_template, request, url_for');
+  out.push('from flask_admin import AdminIndexView, expose');
   out.push('from flask_admin.contrib.sqla import ModelView');
   out.push('from flask_login import current_user');
   out.push('from wtforms import PasswordField');
   out.push('');
   out.push('');
+  out.push('def dashboard_stats():');
+  out.push('    """Per-module record counts for the admin dashboard."""');
+  out.push('    from models import ' + ['User', ...modules.map((m) => m.name)].join(', '));
+  out.push('    return [');
+  for (const module of modules) {
+    out.push(`        {'endpoint': ${pyStr(module.name.toLowerCase())}, 'label': ${pyStr(module.label)}, 'count': ${module.name}.query.count()},`);
+  }
+  out.push('    ]');
+  out.push('');
+  out.push('');
   out.push('class SecureAdminIndexView(AdminIndexView):');
-  out.push('    """Require a logged-in user for the admin home page."""');
+  out.push('    """Dashboard home page, available only to logged-in users."""');
   out.push('');
   out.push('    def is_accessible(self):');
   out.push('        return current_user.is_authenticated');
   out.push('');
   out.push('    def inaccessible_callback(self, name, **kwargs):');
   out.push("        return redirect(url_for('login', next=request.path))");
+  out.push('');
+  out.push("    @expose('/')");
+  out.push('    def index(self):');
+  out.push('        if not current_user.is_authenticated:');
+  out.push("            return redirect(url_for('login', next=request.path))");
+  out.push("        return self.render('admin/index.html', stats=dashboard_stats(), user=current_user)");
   out.push('');
   out.push('');
   out.push('class SecureModelView(ModelView):');
@@ -645,6 +662,46 @@ function renderReadme(isd, adminAccount, adminPassword) {
   lines.push('MIT License');
   lines.push('');
   return lines.join('\n');
+}
+
+
+function renderDashboardPage(isd) {
+  const name = isd.project.name;
+  return `{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid" style="padding-top:18px">
+  <div class="row" style="margin-bottom:18px">
+    <div class="col-md-12">
+      <h2 style="margin:0 0 4px">概览</h2>
+      <p style="color:#777;margin:0">欢迎回来，{{ user.username }}。这里是 ${name} 的业务概况。</p>
+    </div>
+  </div>
+  <div class="row">
+    {% for stat in stats %}
+    <div class="col-md-4 col-sm-6">
+      <div class="panel panel-default">
+        <div class="panel-body">
+          <h4 style="margin:0 0 8px">{{ stat.label }}</h4>
+          <p style="font-size:32px;font-weight:700;margin:0;line-height:1.1">{{ stat.count }}</p>
+          <p style="color:#888;margin:2px 0 12px">条记录</p>
+          <a class="btn btn-primary btn-sm" href="{{ url_for(stat.endpoint + '.index_view') }}">查看列表</a>
+          <a class="btn btn-default btn-sm" href="{{ url_for(stat.endpoint + '.create_view') }}">新增</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if not stats %}
+  <div class="panel panel-default">
+    <div class="panel-body" style="color:#777">
+      还没有可展示的业务模块。
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+`;
 }
 
 function renderLoginPage(isd, adminAccount, adminPassword) {
