@@ -615,8 +615,9 @@ class Config:
     # is required. A user's choice is kept in the signed session cookie.
     THEME_SWATCHES = [
         'default', 'cerulean', 'cosmo', 'cyborg', 'darkly', 'flatly',
-        'journal', 'lumen', 'paper', 'readable', 'sandstone', 'simplex',
-        'slate', 'spacelab', 'superhero', 'united', 'yeti',
+        'journal', 'litera', 'lumen', 'lux', 'materia', 'minty', 'pulse',
+        'sandstone', 'simplex', 'sketchy', 'slate', 'solar', 'spacelab',
+        'superhero', 'united', 'yeti',
     ]
 
     # Chinese is the default locale for generated internal systems.
