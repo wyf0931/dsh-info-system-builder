@@ -329,8 +329,14 @@ function resolveProjectRoot(registry, workspacePath, slug) {
   return target;
 }
 
-/** First free loopback port. */
-function freePort() {
+/**
+ * First free loopback port, scanned from 10000 upward (10xxx range) so
+ * previews never collide with common dev servers on 5000/8000/8080.
+ */
+async function freePort() {
+  for (let port = 10000; port < 11000; port += 1) {
+    if (await canListen(port)) return port;
+  }
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.once('error', reject);
@@ -339,6 +345,15 @@ function freePort() {
       const port = address && typeof address === 'object' ? address.port : 0;
       server.close(() => (port ? resolve(port) : reject(new Error('could not allocate a port'))));
     });
+  });
+}
+
+function canListen(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => server.close(() => resolve(true)));
+    server.listen(port, '127.0.0.1');
   });
 }
 

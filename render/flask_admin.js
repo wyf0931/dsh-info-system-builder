@@ -284,7 +284,7 @@ from app import create_app, db
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', type=int, default=5000, help='Port to run on')
+    parser.add_argument('--port', type=int, default=10000, help='Port to run on (default 10000)')
     parser.add_argument('--init-db', action='store_true', help='Initialize database')
     args = parser.parse_args()
 
@@ -329,11 +329,11 @@ import time
 
 def open_browser():
     time.sleep(2)
-    webbrowser.open('http://localhost:5000/admin/')
+    webbrowser.open('http://localhost:10000/admin/')
 
 app = create_app()
 threading.Thread(target=open_browser).start()
-app.run(host='127.0.0.1', port=5000, debug=True)
+app.run(host='127.0.0.1', port=10000, debug=True)
 "
 `;
 
@@ -705,7 +705,7 @@ function renderApp(isd) {
   out.push('');
   out.push("if __name__ == '__main__':");
   out.push('    app = create_app()');
-  out.push('    app.run(debug=True, port=5000)');
+  out.push('    app.run(debug=True, port=10000)');
   out.push('');
   return out.join('\n');
 }
@@ -810,7 +810,7 @@ function renderReadme(isd, adminAccount, adminPassword) {
   lines.push('');
   lines.push('## Access');
   lines.push('');
-  lines.push('- URL: http://localhost:5000/');
+  lines.push('- URL: http://localhost:10000/');
   lines.push('  (unauthenticated visitors are redirected to /login)');
   lines.push(`- Username: ${adminAccount}`);
   lines.push(`- Password: ${adminPassword}`);

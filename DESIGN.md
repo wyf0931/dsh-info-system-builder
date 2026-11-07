@@ -28,7 +28,7 @@ info_system_render 工具（确定性渲染）
 <workspace>/info-systems/<slug>/project/   Flask-Admin + SQLite
    │
    ▼
-uv run python run.py  →  http://127.0.0.1:5000/admin/
+uv run python run.py  →  http://127.0.0.1:10000/admin/
 ```
 
 - **不再有 LangGraph 机械流水线**：扩写、设计、审计都是 DSH Agent 的本职思考；确认由对话（`ask_user_question` 或自然回复）承担。

@@ -42,7 +42,7 @@ Agent 会自动扩写需求 → 设计 ISD 蓝图并落盘 → 展示模块×字
 cd info-systems/<slug>/project
 uv sync
 uv run python run.py --init-db
-uv run python run.py        # http://127.0.0.1:5000/admin/  admin/admin123
+uv run python run.py        # http://127.0.0.1:10000/admin/  admin/admin123
 ```
 
 **方式二：向导式**
