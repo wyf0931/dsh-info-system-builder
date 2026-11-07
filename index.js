@@ -87,6 +87,15 @@ export function apply(ctx) {
       disposers.length, 'routes');
     return () => {
       for (const dispose of disposers) dispose();
+      // Unloading the plugin must not leave preview servers running.
+      for (const [, entry] of previews) {
+        try {
+          entry.child.kill('SIGTERM');
+        } catch {
+          // already gone
+        }
+      }
+      previews.clear();
     };
   }, 'info-system-builder: register project routes');
 }
@@ -143,25 +152,45 @@ function registerProjectRoutes(ctx) {
         if (!fs.existsSync(path.join(projectDir, 'app.py'))) {
           return json(res, 400, { ok: false, error: 'project has not been rendered yet' });
         }
+        const key = previewKey(body.workspacePath, body.slug);
+        // Idempotent start: an already-running preview is returned as-is, so a
+        // repeated click can never spawn a second server.
+        const existing = previews.get(key);
+        if (existing && existing.child.exitCode === null) {
+          return json(res, 200, { ok: true, port: existing.port, url: `http://127.0.0.1:${existing.port}/admin/`, alreadyRunning: true });
+        }
+        previews.delete(key);
         const port = await freePort();
+        let stderr = '';
         const child = spawn('uv', ['run', 'python', 'run.py', '--port', String(port)], {
           cwd: projectDir,
-          stdio: 'ignore',
+          stdio: ['ignore', 'ignore', 'pipe'],
           detached: false,
         });
-        const key = previewKey(body.workspacePath, body.slug);
-        const entry = { child, port };
+        child.stderr.on('data', (chunk) => {
+          stderr = (stderr + chunk.toString()).slice(-2000);
+        });
+        const entry = { child, port, startedAt: Date.now() };
         previews.set(key, entry);
         child.on('exit', () => {
           const current = previews.get(key);
           if (current && current.child === child) previews.delete(key);
         });
-        return json(res, 200, { ok: true, port, url: `http://127.0.0.1:${port}/admin/` });
+        // Give the server a moment to fail fast (missing venv, bad port, ...).
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        if (child.exitCode !== null) {
+          previews.delete(key);
+          const tail = stderr.trim().split('\n').slice(-3).join(' | ') || 'unknown error';
+          return json(res, 500, { ok: false, error: `preview exited immediately: ${tail}` });
+        }
+        return json(res, 200, { ok: true, port, url: `http://127.0.0.1:${port}/admin/`, started: true });
       }
       if (route === 'preview/stop' && req.method === 'POST') {
         const body = await readJson(req);
+        const key = previewKey(body.workspacePath, body.slug);
+        const entry = previews.get(key);
         stopPreview(registry, body.workspacePath, body.slug);
-        return json(res, 200, { ok: true });
+        return json(res, 200, { ok: true, stopped: Boolean(entry) });
       }
       if (route === 'reveal' && req.method === 'POST') {
         const body = await readJson(req);

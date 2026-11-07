@@ -58,7 +58,9 @@ window.__ModuleLoader__.load({
         'history.fields': '字段',
         'history.previewRunning': '预览中',
         'history.previewStart': '启动预览',
+        'history.previewStarting': '启动中…',
         'history.previewStop': '停止预览',
+        'history.previewStopping': '停止中…',
         'history.download': '下载',
         'history.reveal': '打开文件夹',
         'history.delete': '删除',
@@ -115,7 +117,9 @@ window.__ModuleLoader__.load({
         'history.fields': 'fields',
         'history.previewRunning': 'Preview running',
         'history.previewStart': 'Start preview',
+        'history.previewStarting': 'Starting…',
         'history.previewStop': 'Stop preview',
+        'history.previewStopping': 'Stopping…',
         'history.download': 'Download',
         'history.reveal': 'Open folder',
         'history.delete': 'Delete',
@@ -397,7 +401,10 @@ window.__ModuleLoader__.load({
             await post('delete', { slug, workspacePath });
           } else if (action === 'preview-start') {
             const data = await post('preview/start', { slug, workspacePath });
-            if (data && data.url) window.open(data.url, '_blank', 'noopener');
+            if (data && data.url) {
+              setNotice(`${t('history.previewRunning')}: ${data.url}`);
+              window.open(data.url, '_blank', 'noopener');
+            }
           } else if (action === 'preview-stop') {
             await post('preview/stop', { slug, workspacePath });
           } else if (action === 'reveal') {
@@ -424,6 +431,8 @@ window.__ModuleLoader__.load({
       const row = (project) => {
         const key = `${project.workspacePath}::${project.slug}`;
         const isBusy = busy !== null && busy.endsWith(`:${project.slug}`);
+        const starting = busy === `preview-start:${project.slug}`;
+        const stopping = busy === `preview-stop:${project.slug}`;
         return h('div', { key, className: 'isb-project' },
           h('div', { className: 'isb-project-main' },
             h('div', { className: 'isb-project-title' },
@@ -440,8 +449,10 @@ window.__ModuleLoader__.load({
                 : null)),
           h('div', { className: 'isb-project-actions' },
             project.preview
-              ? h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'preview-stop') }, t('history.previewStop'))
-              : h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy || !project.rendered, title: project.rendered ? '' : t('history.blueprintOnly'), onClick: () => act(project.slug, project.workspacePath, 'preview-start') }, t('history.previewStart')),
+              ? h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'preview-stop') },
+                stopping ? t('history.previewStopping') : t('history.previewStop'))
+              : h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy || !project.rendered, title: project.rendered ? '' : t('history.blueprintOnly'), onClick: () => act(project.slug, project.workspacePath, 'preview-start') },
+                starting ? t('history.previewStarting') : t('history.previewStart')),
             h('a', { className: 'isb-btn-sm isb-btn-link', href: `/info-system-builder/download?slug=${encodeURIComponent(project.slug)}&workspacePath=${encodeURIComponent(project.workspacePath)}`, download: `${project.slug}.tar.gz` }, t('history.download')),
             h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => act(project.slug, project.workspacePath, 'reveal') }, t('history.reveal')),
             h('button', { className: 'isb-btn-sm', type: 'button', disabled: isBusy, onClick: () => copyPath(project) }, t('history.copyPath')),
