@@ -22,6 +22,22 @@ const SQLALCHEMY_TYPES = {
   datetime: 'DateTime',
 };
 
+/**
+ * The pinned, verified technology stack for generated projects. Exact versions
+ * keep every render reproducible and prevent silent API drift (e.g. Flask-Admin
+ * 1.x vs 2.x) or resolver dead-ends on fresh machines.
+ */
+const FIXED_STACK = {
+  python: '>=3.11,<3.14',
+  flask: '3.1.3',
+  'flask-admin': '2.2.1',
+  'flask-sqlalchemy': '3.1.1',
+  'flask-bcrypt': '1.0.1',
+  'flask-login': '0.6.3',
+  'flask-babel': '4.0.0',
+  wtforms: '3.3.2',
+};
+
 /** Every accepted ISD field type (enum carries its options in `choices`). */
 const FIELD_TYPES = [...Object.keys(SQLALCHEMY_TYPES), 'enum'];
 
@@ -325,17 +341,19 @@ app.run(host='127.0.0.1', port=5000, debug=True)
 name = "${project.code}"
 version = "${project.version}"
 description = "${project.name}"
-requires-python = ">=3.10"
+requires-python = "${FIXED_STACK.python}"
 dependencies = [
-    "flask>=3.0.0",
-    "flask-admin>=2.0.0",
-    "flask-sqlalchemy>=3.1.0",
-    "flask-bcrypt>=1.0.0",
-    "flask-login>=0.6.0",
-    "flask-babel>=4.0.0",
-    "wtforms>=3.0.0",
+    "flask==${FIXED_STACK.flask}",
+    "flask-admin==${FIXED_STACK['flask-admin']}",
+    "flask-sqlalchemy==${FIXED_STACK['flask-sqlalchemy']}",
+    "flask-bcrypt==${FIXED_STACK['flask-bcrypt']}",
+    "flask-login==${FIXED_STACK['flask-login']}",
+    "flask-babel==${FIXED_STACK['flask-babel']}",
+    "wtforms==${FIXED_STACK.wtforms}",
 ]
 
+# Exact pins: every generated project uses the same verified stack, so
+# running uv sync never resolves a different (and possibly incompatible) version.
 # Deliberately no [build-system]: this is a flat, run-in-place application
 # (uv sync treats it as a virtual project and installs only the dependencies
 # above; declaring hatchling would make uv try to build the project itself
@@ -810,6 +828,18 @@ function renderReadme(isd, adminAccount, adminPassword) {
   for (const module of modules) {
     lines.push(`- ${module.label} (${module.name}): ${module.description}`);
   }
+  lines.push('');
+  lines.push('## Tech stack');
+  lines.push('');
+  lines.push('Pinned exact versions (reproducible builds, no version drift):');
+  lines.push('');
+  lines.push('- Python ' + FIXED_STACK.python);
+  lines.push('- Flask ' + FIXED_STACK.flask + ' / Flask-Admin ' + FIXED_STACK['flask-admin']);
+  lines.push('- Flask-SQLAlchemy ' + FIXED_STACK['flask-sqlalchemy'] + ' / SQLite (instance/app.db)');
+  lines.push('- Flask-Login ' + FIXED_STACK['flask-login'] + ' / Flask-Bcrypt ' + FIXED_STACK['flask-bcrypt']);
+  lines.push('- Flask-Babel ' + FIXED_STACK['flask-babel'] + ' / WTForms ' + FIXED_STACK.wtforms);
+  lines.push('');
+  lines.push('`uv sync` writes uv.lock on first run, freezing the full dependency tree.');
   lines.push('');
   lines.push('## Configuration');
   lines.push('');
