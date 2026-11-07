@@ -460,6 +460,8 @@ function renderViews(isd) {
     out.push(`    """Chinese labels for ${module.label}."""`);
     out.push('    # id first, business fields in ISD order, bookkeeping columns last.');
     out.push(`    column_list = ${pyList(['id', ...module.fields.map((f) => f.name), 'created_time', 'modified_time'])}`);
+    out.push("    # System-maintained columns never appear on create/edit forms.");
+    out.push("    form_excluded_columns = ['created_time', 'modified_time']");
     out.push('    column_labels = {');
     out.push("        'id': '编号',");
     out.push("        'created_time': '创建时间',");
