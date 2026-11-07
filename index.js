@@ -32,7 +32,8 @@ WHEN to call:
 
 BEFORE calling:
 1. Design modules (PascalCase names + Chinese labels, default max 6) and fields (snake_case names + Chinese labels, default max 15 per module). Field types: string/text/integer/float/boolean/date/time/datetime/enum. For status/category-like fields prefer { "type": "enum", "choices": ["待领用", "已领用", "维修中"] } — the generated form renders a dropdown and SQLite stores the label.
-2. Never invent fields named id, created_time, modified_time (auto-added) and never define a User module (built-in auth with admin/admin123).
+2. ANALYZE RELATIONS between modules (1:1 / 1:N) — e.g. 领用人 (Employee) 1:N 领用记录 (Allocation). Declare them under the top-level \`relations\` array as { "type": "many-to-one", "from": "Allocation", "to": "Employee", "field": "employee", "label": "领用人", "required": true, "display_field": "name" }. Do NOT model a relation as a plain string field (employee name text): the renderer adds a real foreign key, a relation dropdown on create/edit, and a related column in the list.
+4. Never invent fields named id, created_time, modified_time (auto-added) and never define a User module (built-in auth with admin/admin123).
 3. Write the ISD to \`info-systems/<slug>/system.isd.json\` under the session workspace, then pass isd_path — this makes the definition a durable, user-editable asset. (Passing inline `+"`isd`"+` is fine for quick drafts.)
 4. Show the blueprint to the user in your reply (a compact module × field table). Do not block on approval by default — users can request changes any time; just re-render after editing the ISD.
 

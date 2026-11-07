@@ -73,6 +73,17 @@ uv run python run.py        # http://127.0.0.1:5000/admin/  admin/admin123
 }
 ```
 
+**模块关系**（一对多/一对一）：用 `relations` 声明，而不是字符串字段模拟关联——
+
+```jsonc
+"relations": [
+  { "type": "many-to-one", "from": "Allocation", "to": "Employee",
+    "field": "employee", "label": "领用人", "display_field": "name" }
+]
+```
+
+渲染器生成真实外键 + `relationship`，创建/编辑表单变成关联下拉，列表显示关联对象。
+
 **中性类型系统**（渲染器负责映射到具体栈）：
 
 | ISD 类型 | Flask-Admin 映射 | 说明 |

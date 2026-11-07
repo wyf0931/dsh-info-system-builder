@@ -76,6 +76,20 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 }
 ```
 
+**模块关系（relations）**——实体之间的一对一/一对多，不要用字符串字段模拟：
+
+```jsonc
+"relations": [
+  { "type": "many-to-one", "from": "Allocation", "to": "Employee",
+    "field": "employee", "label": "领用人", "required": true,
+    "display_field": "name" }
+]
+```
+
+- `from` 持有外键（多的一方），`to` 是被引用的实体（一的一方）
+- 渲染结果：`employee_id` 外键 + `relationship`；创建/编辑表单渲染为**关联下拉**（显示 `display_field`）；列表增加关联列；被引用模型获得 `__str__`
+- 反向集合（backref）不出现在表单里，避免「一」方表单被多选框淹没
+
 **中性类型系统**（栈无关，渲染器负责映射）：
 `string / text / integer / float / boolean / date / time / datetime`
 → Flask-Admin 渲染映射：`String / Text / Integer / Float / Boolean / Date / Time / DateTime`

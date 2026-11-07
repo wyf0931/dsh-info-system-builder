@@ -141,6 +141,48 @@ export function validateAndNormalize(raw) {
     };
   }).filter(Boolean) : [];
 
+  // ---- relations: many-to-one / one-to-one -------------------------------
+  const RELATION_TYPES = ['many-to-one', 'one-to-one'];
+  const moduleByName = new Map(modules.map((m) => [m.name, m]));
+  const relationsRaw = raw.relations ?? [];
+  if (!Array.isArray(relationsRaw)) fail('relations', 'must be an array');
+  const relations = [];
+  const seenRelationFields = new Set();
+  if (Array.isArray(relationsRaw)) {
+    relationsRaw.forEach((rel, i) => {
+      const base = `relations[${i}]`;
+      if (typeof rel !== 'object' || rel === null) { fail(base, 'must be an object'); return; }
+      const type = rel.type;
+      if (!RELATION_TYPES.includes(type)) fail(`${base}.type`, `must be one of ${RELATION_TYPES.join('/')}`);
+      const fromName = rel.from;
+      const toName = rel.to;
+      const fromModule = moduleByName.get(fromName);
+      const toModule = moduleByName.get(toName);
+      if (!fromModule) fail(`${base}.from`, `unknown module "${fromName}"`);
+      if (!toModule) fail(`${base}.to`, `unknown module "${toName}"`);
+      if (fromName === toName) fail(`${base}`, 'a module cannot relate to itself');
+      const field = rel.field;
+      if (typeof field !== 'string' || !SNAKE_CASE.test(field)) fail(`${base}.field`, 'must be snake_case');
+      else if (RESERVED_FIELDS.has(field)) fail(`${base}.field`, `"${field}" is auto-added by the system`);
+      else if (fromModule && fromModule.fields.some((f) => f.name === field)) fail(`${base}.field`, `duplicates an existing field of ${fromName}`);
+      else if (seenRelationFields.has(`${fromName}.${field}`)) fail(`${base}.field`, 'duplicate relation field');
+      else seenRelationFields.add(`${fromName}.${field}`);
+      const displayField = typeof rel.display_field === 'string' && rel.display_field ? rel.display_field : 'name';
+      if (toModule && !toModule.fields.some((f) => f.name === displayField)) {
+        warn(`relation ${fromName}.${field} display_field "${displayField}" is not a field of ${toName}; using __str__ fallback`);
+      }
+      relations.push({
+        type,
+        from: fromName,
+        to: toName,
+        field,
+        label: typeof rel.label === 'string' && rel.label.trim() ? rel.label.trim() : field,
+        required: rel.required === true,
+        display_field: displayField,
+      });
+    });
+  }
+
   if (errors.length) throw new IsdValidationError(errors);
 
   return {
@@ -154,6 +196,7 @@ export function validateAndNormalize(raw) {
       },
       stack: { target, theme },
       modules,
+      relations,
     },
     warnings,
   };
@@ -355,6 +398,15 @@ DATABASE_URL=sqlite:///instance/app.db
 
 function renderModels(isd) {
   const { project, modules } = isd;
+  const relations = isd.relations || [];
+  const byFrom = new Map();
+  const byTo = new Map();
+  for (const rel of relations) {
+    if (!byFrom.has(rel.from)) byFrom.set(rel.from, []);
+    byFrom.get(rel.from).push(rel);
+    if (!byTo.has(rel.to)) byTo.set(rel.to, []);
+    byTo.get(rel.to).push(rel);
+  }
   const out = [];
   out.push(`"""SQLAlchemy models for ${project.name}."""`);
   out.push('');
@@ -399,6 +451,34 @@ function renderModels(isd) {
       if (field.search) parts.push('index=True');
       out.push(`    ${field.name} = db.Column(${parts.join(', ')})`);
     }
+
+    // Relations held by this module (many-to-one / one-to-one).
+    const held = byFrom.get(module.name) || [];
+    for (const rel of held) {
+      const toLower = rel.to.toLowerCase();
+      const fkParts = [`db.ForeignKey('${toLower}s.id')`];
+      if (rel.required) fkParts.push('nullable=False');
+      out.push(`    ${rel.field}_id = db.Column(db.Integer, ${fkParts.join(', ')})`);
+      const fromLower = module.name.toLowerCase();
+      const sameTarget = held.filter((r) => r.to === rel.to);
+      const backref = sameTarget.length > 1 ? `${fromLower}s_${rel.field}` : `${fromLower}s`;
+      if (rel.type === 'one-to-one') {
+        out.push(`    ${rel.field} = db.relationship(${pyStr(rel.to)}, backref=db.backref(${pyStr(backref)}, uselist=False))`);
+      } else {
+        out.push(`    ${rel.field} = db.relationship(${pyStr(rel.to)}, backref=${pyStr(backref)})`);
+      }
+    }
+
+    // Readable label for relationship dropdowns and list cells.
+    const incoming = byTo.get(module.name) || [];
+    if (incoming.length > 0) {
+      const display = incoming[0].display_field;
+      if (module.fields.some((f) => f.name === display)) {
+        out.push('');
+        out.push('    def __str__(self):');
+        out.push(`        return str(self.${display})`);
+      }
+    }
   }
   out.push('');
   return out.join('\n');
@@ -406,6 +486,7 @@ function renderModels(isd) {
 
 function renderViews(isd) {
   const { modules } = isd;
+  const relations = isd.relations || [];
   const out = [];
   out.push(`"""Flask-Admin views for ${isd.project.name}."""`);
   out.push('');
@@ -476,15 +557,27 @@ function renderViews(isd) {
     out.push(`class ${module.name}View(SecureModelView):`);
     out.push(`    """Chinese labels for ${module.label}."""`);
     out.push('    # id first, business fields in ISD order, bookkeeping columns last.');
-    out.push(`    column_list = ${pyList(['id', ...module.fields.map((f) => f.name), 'created_time', 'modified_time'])}`);
-    out.push("    # System-maintained columns never appear on create/edit forms.");
-    out.push("    form_excluded_columns = ['created_time', 'modified_time']");
+    const relationFields = relations.filter((rel) => rel.from === module.name).map((rel) => rel.field);
+    out.push(`    column_list = ${pyList(['id', ...module.fields.map((f) => f.name), ...relationFields, 'created_time', 'modified_time'])}`);
+    out.push("    # System-maintained columns and reverse collections never appear on forms.");
+    const backrefFields = relations
+      .filter((r) => r.to === module.name)
+      .map((r) => {
+        const fromLower = r.from.toLowerCase();
+        return relations.filter((x) => x.from === r.from && x.to === r.to).length > 1
+          ? `${fromLower}s_${r.field}`
+          : `${fromLower}s`;
+      });
+    out.push(`    form_excluded_columns = ${pyList(['created_time', 'modified_time', ...backrefFields])}`);
     out.push('    column_labels = {');
     out.push("        'id': '编号',");
     out.push("        'created_time': '创建时间',");
     out.push("        'modified_time': '修改时间',");
     for (const field of module.fields) {
       out.push(`        ${pyStr(field.name)}: ${pyStr(field.label)},`);
+    }
+    for (const rel of relations.filter((r) => r.from === module.name)) {
+      out.push(`        ${pyStr(rel.field)}: ${pyStr(rel.label)},`);
     }
     out.push('    }');
   }
