@@ -134,6 +134,8 @@ uv run python run.py  →  http://127.0.0.1:5000/admin/
 1. **`[build-system]` 缺陷（继承自 oma 原模板）**：生成项目声明 hatchling 会让 `uv sync` 尝试把平铺布局的项目本身构建为 wheel 而失败（oma 自己用 `uv run --no-project --with …` 预览，掩盖了此问题）。修复：pyproject.toml 不再声明 build-system，uv 以 virtual 项目模式只装依赖。✅ 已修，重装后 Host 生效。
 2. **子代理会话的写权限**：`info_system_render` 的写盘遵守**调用者会话的 DSH 文件沙箱**。主会话（workspace-write）可写 workspace 内一切目标；权限受限的子代理/委托会话会被拒绝——这是平台安全契约的正确行为，不是缺陷。工具 description 已隐含此点（输出目录默认在 workspace 下）。
 
+**2026-11-07 登录鉴权**：生成项目接入 **Flask-Login**，与内置 User 模型联动——`User(UserMixin)`、`login_manager`（强会话保护）、`/login` `/logout` 路由 + 独立登录页（`templates/login.html`，中文、无外部依赖）；`SecureAdminIndexView` / `SecureModelView` 保护全部后台视图，未登录重定向 `?next=`（相对路径 + 防 `//host` 开放重定向）；`run.py --init-db` 自动创建 `admin/admin123`；「用户管理」新增 `password` 表单字段用于设置/修改密码，隐藏 password_hash 列。端到端验证：未登录 302→登录页 200→POST 登录 302→认证后 200→登出 302。
+
 **运维知识**：
 
 - 修改已安装 bundle 的源文件（pnpm link 目录）**不会热重载 Host 模块**（Node ESM 缓存按 URL）；`remove_bundle` + `install_bundle` 重装一轮即可加载新模块代（实测有效），无需重启 DSH。

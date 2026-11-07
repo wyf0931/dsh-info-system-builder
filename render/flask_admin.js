@@ -176,10 +176,15 @@ export function renderFlaskAdmin(isd, opts) {
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
+from flask_login import LoginManager
 
 # Initialize extensions
 db = SQLAlchemy()
 bcrypt = Bcrypt()
+login_manager = LoginManager()
+login_manager.login_view = 'login'
+login_manager.login_message = '请先登录'
+login_manager.session_protection = 'strong'
 `;
 
   files['models.py'] = renderModels(isd);
@@ -209,6 +214,15 @@ if __name__ == '__main__':
     if args.init_db:
         with app.app_context():
             db.create_all()
+            from models import User
+            if not User.query.filter_by(username='admin').first():
+                admin_user = User(username='admin')
+                admin_user.set_password('admin123')
+                db.session.add(admin_user)
+                db.session.commit()
+                print('Admin user created: admin / admin123')
+            else:
+                print('Admin user already exists: admin')
             print('Database initialized!')
         sys.exit(0)
 
@@ -308,6 +322,7 @@ FLASK_ENV=development
 DATABASE_URL=sqlite:///instance/app.db
 `;
 
+  files['templates/login.html'] = renderLoginPage(isd, adminAccount, adminPassword);
   files['README.md'] = renderReadme(isd, adminAccount, adminPassword);
 
   // The ISD itself is part of the deliverable: the user's editable source of truth.
@@ -323,10 +338,11 @@ function renderModels(isd) {
   out.push('');
   out.push('from extensions import db');
   out.push('from flask_bcrypt import generate_password_hash, check_password_hash');
+  out.push('from flask_login import UserMixin');
   out.push('from datetime import datetime');
   out.push('');
   out.push('');
-  out.push('class User(db.Model):');
+  out.push('class User(UserMixin, db.Model):');
   out.push('    """User model for authentication."""');
   out.push("    __tablename__ = 'users'");
   out.push('');
@@ -369,23 +385,52 @@ function renderViews(isd) {
   const out = [];
   out.push(`"""Flask-Admin views for ${isd.project.name}."""`);
   out.push('');
-  out.push('from flask_admin import Admin, AdminIndexView, expose');
+  out.push('from flask import redirect, request, url_for');
+  out.push('from flask_admin import AdminIndexView');
   out.push('from flask_admin.contrib.sqla import ModelView');
+  out.push('from flask_login import current_user');
+  out.push('from wtforms import PasswordField');
   out.push('');
   out.push('');
-  out.push('class UserView(ModelView):');
-  out.push('    """Chinese labels for the built-in user model."""');
+  out.push('class SecureAdminIndexView(AdminIndexView):');
+  out.push('    """Require a logged-in user for the admin home page."""');
+  out.push('');
+  out.push('    def is_accessible(self):');
+  out.push('        return current_user.is_authenticated');
+  out.push('');
+  out.push('    def inaccessible_callback(self, name, **kwargs):');
+  out.push("        return redirect(url_for('login', next=request.path))");
+  out.push('');
+  out.push('');
+  out.push('class SecureModelView(ModelView):');
+  out.push('    """Require a logged-in user for every admin model view."""');
+  out.push('');
+  out.push('    def is_accessible(self):');
+  out.push('        return current_user.is_authenticated');
+  out.push('');
+  out.push('    def inaccessible_callback(self, name, **kwargs):');
+  out.push("        return redirect(url_for('login', next=request.path))");
+  out.push('');
+  out.push('');
+  out.push('class UserView(SecureModelView):');
+  out.push('    """User management. Passwords are set through the `password` field."""');
+  out.push("    column_exclude_list = ['password_hash', 'created_time', 'modified_time']");
+  out.push("    form_excluded_columns = ['password_hash', 'created_time', 'modified_time']");
+  out.push("    form_extra_fields = {'password': PasswordField('密码')}");
   out.push('    column_labels = {');
   out.push("        'id': '编号',");
   out.push("        'username': '用户名',");
-  out.push("        'password_hash': '密码哈希',");
   out.push("        'created_time': '创建时间',");
   out.push("        'modified_time': '修改时间',");
   out.push('    }');
+  out.push('');
+  out.push('    def on_model_change(self, form, model, is_created):');
+  out.push('        if form.password.data:');
+  out.push('            model.set_password(form.password.data)');
   for (const module of modules) {
     out.push('');
     out.push('');
-    out.push(`class ${module.name}View(ModelView):`);
+    out.push(`class ${module.name}View(SecureModelView):`);
     out.push(`    """Chinese labels for ${module.label}."""`);
     out.push('    column_labels = {');
     out.push("        'id': '编号',");
@@ -405,11 +450,12 @@ function renderApp(isd) {
   const out = [];
   out.push(`"""Flask application factory for ${project.name}."""`);
   out.push('');
-  out.push('from flask import Flask, request, session');
+  out.push('from flask import Flask, flash, redirect, render_template, request, session, url_for');
   out.push('from flask_babel import Babel');
   out.push('from flask_admin import Admin');
+  out.push('from flask_login import login_user, logout_user');
   out.push('');
-  out.push('from extensions import db');
+  out.push('from extensions import db, login_manager');
   out.push('from models import *');
   out.push('from views import *');
   out.push('from config import Config');
@@ -431,9 +477,34 @@ function renderApp(isd) {
   out.push('');
   out.push('    # Initialize extensions');
   out.push('    db.init_app(app)');
+  out.push('    login_manager.init_app(app)');
+  out.push('');
+  out.push('    @login_manager.user_loader');
+  out.push('    def load_user(user_id):');
+  out.push('        return db.session.get(User, int(user_id))');
+  out.push('');
+  out.push("    @app.route('/login', methods=['GET', 'POST'])");
+  out.push('    def login():');
+  out.push("        if request.method == 'POST':");
+  out.push("            username = request.form.get('username', '').strip()");
+  out.push("            password = request.form.get('password', '')");
+  out.push('            user = User.query.filter_by(username=username).first()');
+  out.push('            if user and user.check_password(password):');
+  out.push('                login_user(user, remember=True)');
+  out.push("                next_url = request.args.get('next') or url_for('admin.index')");
+  out.push("                if not next_url.startswith('/') or next_url.startswith('//'):");
+  out.push("                    next_url = url_for('admin.index')");
+  out.push('                return redirect(next_url)');
+  out.push("            flash('用户名或密码错误', 'error')");
+  out.push("        return render_template('login.html')");
+  out.push('');
+  out.push("    @app.route('/logout')");
+  out.push('    def logout():');
+  out.push('        logout_user()');
+  out.push("        return redirect(url_for('login'))");
   out.push('');
   out.push('    # Create admin interface');
-  out.push(`    admin = Admin(app, name=${pyStr(project.name)})`);
+  out.push(`    admin = Admin(app, name=${pyStr(project.name)}, index_view=SecureAdminIndexView())`);
   for (const module of modules) {
     out.push('');
     out.push(`    # ${module.label}`);
@@ -543,9 +614,14 @@ function renderReadme(isd, adminAccount, adminPassword) {
   lines.push('');
   lines.push('## Access');
   lines.push('');
-  lines.push('- URL: http://localhost:5000/admin/');
+  lines.push('- URL: http://localhost:5000/');
+  lines.push('  (unauthenticated visitors are redirected to /login)');
   lines.push(`- Username: ${adminAccount}`);
   lines.push(`- Password: ${adminPassword}`);
+  lines.push('');
+  lines.push('Authentication uses Flask-Login backed by the built-in User model.');
+  lines.push('Add or manage accounts in the admin "用户管理" view; set passwords');
+  lines.push('through the extra `password` field on the create/edit form.');
   lines.push('');
   lines.push('## Modules');
   lines.push('');
@@ -569,4 +645,55 @@ function renderReadme(isd, adminAccount, adminPassword) {
   lines.push('MIT License');
   lines.push('');
   return lines.join('\n');
+}
+
+function renderLoginPage(isd, adminAccount, adminPassword) {
+  const name = isd.project.name;
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 - ${name}</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           background: #f3f5f8; color: #1f2937;
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .card { width: 340px; max-width: calc(100vw - 40px); background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 14px; padding: 28px 26px; box-shadow: 0 10px 30px rgba(15, 23, 42, .06); }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { margin: 0 0 20px; font-size: 12px; color: #6b7280; }
+    label { display: block; font-size: 12px; color: #374151; margin-bottom: 12px; }
+    input { width: 100%; margin-top: 6px; padding: 9px 11px; font-size: 14px; border: 1px solid #d1d5db;
+            border-radius: 8px; outline: none; }
+    input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+    button { width: 100%; margin-top: 6px; padding: 10px; font-size: 14px; font-weight: 600; color: #fff;
+             background: #2563eb; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .error { margin: 0 0 14px; padding: 9px 11px; font-size: 12px; color: #b91c1c; background: #fef2f2;
+             border: 1px solid #fecaca; border-radius: 8px; }
+    .hint { margin: 16px 0 0; font-size: 11px; color: #9ca3af; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>${name}</h1>
+    <p class="sub">内部信息管理系统 · 请登录</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="error">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <label>用户名<input name="username" autocomplete="username" autofocus required></label>
+      <label>密码<input type="password" name="password" autocomplete="current-password" required></label>
+      <button type="submit">登录</button>
+    </form>
+    <p class="hint">默认账号 ${adminAccount} / ${adminPassword}，登录后可在「用户管理」中修改。</p>
+  </main>
+</body>
+</html>
+`;
 }
