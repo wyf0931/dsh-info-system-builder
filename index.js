@@ -31,7 +31,7 @@ WHEN to call:
 - Call it once per blueprint revision. It is idempotent: editing the ISD and re-rendering regenerates the project cleanly.
 
 BEFORE calling:
-1. Design modules (PascalCase names + Chinese labels, default max 6) and fields (snake_case names + Chinese labels, default max 15 per module). Field types: string/text/integer/float/boolean/date/time/datetime.
+1. Design modules (PascalCase names + Chinese labels, default max 6) and fields (snake_case names + Chinese labels, default max 15 per module). Field types: string/text/integer/float/boolean/date/time/datetime/enum. For status/category-like fields prefer { "type": "enum", "choices": ["待领用", "已领用", "维修中"] } — the generated form renders a dropdown and SQLite stores the label.
 2. Never invent fields named id, created_time, modified_time (auto-added) and never define a User module (built-in auth with admin/admin123).
 3. Write the ISD to \`info-systems/<slug>/system.isd.json\` under the session workspace, then pass isd_path — this makes the definition a durable, user-editable asset. (Passing inline `+"`isd`"+` is fine for quick drafts.)
 4. Show the blueprint to the user in your reply (a compact module × field table). Do not block on approval by default — users can request changes any time; just re-render after editing the ISD.

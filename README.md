@@ -82,6 +82,7 @@ uv run python run.py        # http://127.0.0.1:5000/admin/  admin/admin123
 | `integer` / `float` | `db.Integer` / `db.Float` | 数量、金额 |
 | `boolean` | `db.Boolean` | 状态开关 |
 | `date` / `time` / `datetime` | `db.Date` / `db.Time` / `db.DateTime` | 日期时间 |
+| `enum` + `choices` | `db.Enum("A", "B", …)` | 状态/类别字段，表单渲染为下拉选择 |
 
 约定：`id` / `created_time` / `modified_time` 自动注入；内置 `User` 模型（`admin/admin123`）——蓝图里不需要也不允许定义它们。
 

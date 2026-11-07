@@ -22,6 +22,9 @@ const SQLALCHEMY_TYPES = {
   datetime: 'DateTime',
 };
 
+/** Every accepted ISD field type (enum carries its options in `choices`). */
+const FIELD_TYPES = [...Object.keys(SQLALCHEMY_TYPES), 'enum'];
+
 const MAX_MODULES = 12;
 const MAX_FIELDS_PER_MODULE = 30;
 
@@ -106,7 +109,18 @@ export function validateAndNormalize(raw) {
       else seenField.add(fName);
 
       const fType = typeof f.type === 'string' ? f.type.toLowerCase() : undefined;
-      if (!(fType in SQLALCHEMY_TYPES)) fail(`${fBase}.type`, `must be one of ${Object.keys(SQLALCHEMY_TYPES).join('/')} (got "${f.type}")`);
+      if (!FIELD_TYPES.includes(fType)) fail(`${fBase}.type`, `must be one of ${FIELD_TYPES.join('/')} (got "${f.type}")`);
+
+      let choices;
+      if (fType === 'enum') {
+        if (!Array.isArray(f.choices) || f.choices.length < 2) {
+          fail(`${fBase}.choices`, 'enum fields require a "choices" array with at least 2 values');
+        } else {
+          choices = f.choices.map((c) => String(c).trim()).filter(Boolean);
+          if (choices.length < 2) fail(`${fBase}.choices`, 'enum needs at least 2 non-empty values');
+          else if (new Set(choices).size !== choices.length) fail(`${fBase}.choices`, 'enum values must be unique');
+        }
+      }
 
       return {
         name: fName,
@@ -115,6 +129,7 @@ export function validateAndNormalize(raw) {
         required: f.required === true,
         search: f.search === true,
         description: typeof f.description === 'string' ? f.description : '',
+        ...(choices ? { choices } : {}),
       };
     }).filter(Boolean) : [];
 
@@ -377,7 +392,9 @@ function renderModels(isd) {
     out.push('    created_time = db.Column(db.DateTime, default=datetime.utcnow)');
     out.push('    modified_time = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)');
     for (const field of module.fields) {
-      const parts = [`db.${SQLALCHEMY_TYPES[field.type]}`];
+      const parts = field.type === 'enum'
+        ? [`db.Enum(${field.choices.map((c) => pyStr(c)).join(', ')})`]
+        : [`db.${SQLALCHEMY_TYPES[field.type]}`];
       if (field.required) parts.push('nullable=False');
       if (field.search) parts.push('index=True');
       out.push(`    ${field.name} = db.Column(${parts.join(', ')})`);
