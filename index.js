@@ -116,6 +116,10 @@ const ROUTE_PREFIX = '/info-system-builder/';
 function registerProjectRoutes(ctx) {
   const server = ctx.webServer;
   const registry = ctx.workspaceRegistry;
+  if (!server || typeof server.register !== 'function') {
+    console.warn('[info-system-builder] webServer unavailable; project routes disabled');
+    return [];
+  }
 
   const handler = async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -453,11 +457,33 @@ function makeRenderTool(ctx) {
         : path.join(cwd, 'info-systems', isd.project.code, 'project');
       const projectDir = path.resolve(cwd, args.output_dir || defaultDir);
 
+      const policy = resolveWritePolicy(ctx, exec);
+      if (policy.mode === 'read-only') {
+        return { ok: false, errors: [{ message: 'the session sandbox is read-only; rendering needs workspace-write access' }] };
+      }
       const written = [];
       for (const [rel, content] of Object.entries(files)) {
         const abs = path.join(projectDir, rel);
+        // Parent directories are created host-side; file contents still go
+        // through the fs backend under the resolved policy.
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
         const target = await ctx.fs.resolve(abs, { cwd, signal });
-        const outcome = await ctx.fs.writeText(target, content, undefined, signal);
+        let outcome;
+        try {
+          outcome = await ctx.fs.writeText(target, content, undefined, signal, policy);
+        } catch (error) {
+          // Surface the sandbox decision as a structured, actionable error
+          // instead of a bare exception the agent can only retry blindly.
+          return {
+            ok: false,
+            errors: [{
+              message:
+                `Sandbox denied writing ${rel} (mode=${policy.mode}, workspaceRoot=${policy.workspaceRoot}). ` +
+                `Rendering writes under the session workspace; make sure the session is workspace-write ` +
+                `and the output directory is inside it. Original error: ${String(error)}`,
+            }],
+          };
+        }
         if (outcome && outcome.error) {
           return { ok: false, errors: [{ message: `Failed to write ${rel}: ${String(outcome.error)}` }] };
         }
@@ -515,4 +541,24 @@ function resolveCwd(ctx, exec) {
     // sessions service optional in exotic scopes — fall through.
   }
   return process.cwd();
+}
+
+/**
+ * Resolve the exact sandbox policy for this execution. Without an explicit
+ * policy the fs backend applies its own default, which denies writes from a
+ * tool context — that was the cause of the "blocked by the sandbox" render
+ * failures. The policy service owns the session mode log and its cwd boundary.
+ */
+function resolveWritePolicy(ctx, exec) {
+  const cwd = resolveCwd(ctx, exec);
+  try {
+    const service = ctx.get ? ctx.get('sandboxPolicy') : undefined;
+    if (service && typeof service.resolve === 'function') {
+      const session = exec?.agent?.id ? ctx.sessions.get(exec.agent.id) : undefined;
+      return service.resolve({ session });
+    }
+  } catch {
+    // Fall through to the conservative default below.
+  }
+  return { mode: 'workspace-write', workspaceRoot: cwd };
 }
