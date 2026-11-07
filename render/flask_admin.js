@@ -154,6 +154,11 @@ function slugify(name) {
   return `system-${hash.toString(36)}`;
 }
 
+/** Python list literal of strings. */
+function pyList(values) {
+  return `[${values.map((value) => pyStr(value)).join(', ')}]`;
+}
+
 /** Python single-quoted string literal. */
 function pyStr(value) {
   return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -453,6 +458,8 @@ function renderViews(isd) {
     out.push('');
     out.push(`class ${module.name}View(SecureModelView):`);
     out.push(`    """Chinese labels for ${module.label}."""`);
+    out.push('    # Business fields first; system bookkeeping columns last.');
+    out.push(`    column_list = ${pyList([...module.fields.map((f) => f.name), 'id', 'created_time', 'modified_time'])}`);
     out.push('    column_labels = {');
     out.push("        'id': '编号',");
     out.push("        'created_time': '创建时间',");
