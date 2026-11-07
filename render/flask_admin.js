@@ -262,10 +262,10 @@ app.run(host='127.0.0.1', port=5000, debug=True)
 name = "${project.code}"
 version = "${project.version}"
 description = "${project.name}"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0.0",
-    "flask-admin>=1.6.0",
+    "flask-admin>=2.0.0",
     "flask-sqlalchemy>=3.1.0",
     "flask-bcrypt>=1.0.0",
     "flask-login>=0.6.0",
@@ -324,6 +324,7 @@ DATABASE_URL=sqlite:///instance/app.db
 
   files['templates/login.html'] = renderLoginPage(isd, adminAccount, adminPassword);
   files['templates/admin/index.html'] = renderDashboardPage(isd);
+  files['templates/admin/master.html'] = renderAdminMaster(isd);
   files['README.md'] = renderReadme(isd, adminAccount, adminPassword);
 
   // The ISD itself is part of the deliverable: the user's editable source of truth.
@@ -470,6 +471,7 @@ function renderApp(isd) {
   out.push('from flask import Flask, flash, redirect, render_template, request, session, url_for');
   out.push('from flask_babel import Babel');
   out.push('from flask_admin import Admin');
+  out.push('from flask_admin.theme import Bootstrap4Theme');
   out.push('from flask_login import login_user, logout_user');
   out.push('');
   out.push('from extensions import db, login_manager');
@@ -520,8 +522,33 @@ function renderApp(isd) {
   out.push('        logout_user()');
   out.push("        return redirect(url_for('login'))");
   out.push('');
-  out.push('    # Create admin interface');
-  out.push(`    admin = Admin(app, name=${pyStr(project.name)}, index_view=SecureAdminIndexView())`);
+  out.push("    @app.route('/theme/<swatch>')");
+  out.push('    def set_theme(swatch):');
+  out.push('        """Persist the chosen Bootswatch theme in the session cookie."""');
+  out.push('        if swatch in Config.THEME_SWATCHES:');
+  out.push("            session['admin_swatch'] = swatch");
+  out.push("        return redirect(request.referrer or url_for('admin.index'))");
+  out.push('');
+  out.push('    # Create admin interface (Flask-Admin 2.x theme object)');
+  out.push('    admin = Admin(');
+  out.push('        app,');
+  out.push(`        name=${pyStr(project.name)},`);
+  out.push('        theme=Bootstrap4Theme(swatch=Config.ADMIN_SWATCH, fluid=True),');
+  out.push('        index_view=SecureAdminIndexView(),');
+  out.push('    )');
+  out.push('');
+  out.push('    @app.before_request');
+  out.push('    def apply_theme():');
+  out.push("        swatch = session.get('admin_swatch')");
+  out.push('        if swatch in Config.THEME_SWATCHES:');
+  out.push('            admin.theme.swatch = swatch');
+  out.push('');
+  out.push('    @app.context_processor');
+  out.push('    def inject_theme():');
+  out.push('        return {');
+  out.push("            'theme_swatches': Config.THEME_SWATCHES,");
+  out.push("            'current_swatch': admin.theme.swatch,");
+  out.push('        }');
   for (const module of modules) {
     out.push('');
     out.push(`    # ${module.label}`);
@@ -569,7 +596,18 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Flask-Admin
-    FLASK_ADMIN_SWATCH = ${pyStr(isd.stack.theme)}
+    # Default Bootswatch swatch (this app's own setting; Flask-Admin 2.x reads
+    # the live value from the Admin theme object, seeded from here).
+    ADMIN_SWATCH = ${pyStr(isd.stack.theme)}
+
+    # Bootswatch themes offered in the navbar theme switcher. Every entry is
+    # bundled with flask-admin (static/bootstrap/bootstrap3/swatch), so no CDN
+    # is required. A user's choice is kept in the signed session cookie.
+    THEME_SWATCHES = [
+        'default', 'cerulean', 'cosmo', 'cyborg', 'darkly', 'flatly',
+        'journal', 'lumen', 'paper', 'readable', 'sandstone', 'simplex',
+        'slate', 'spacelab', 'superhero', 'united', 'yeti',
+    ]
 
     # Chinese is the default locale for generated internal systems.
     BABEL_DEFAULT_LOCALE = 'zh_CN'
@@ -640,6 +678,10 @@ function renderReadme(isd, adminAccount, adminPassword) {
   lines.push('Add or manage accounts in the admin "用户管理" view; set passwords');
   lines.push('through the extra `password` field on the create/edit form.');
   lines.push('');
+  lines.push('The navbar offers a Bootswatch theme switcher (persisted in the signed');
+  lines.push('session cookie) and a user menu with 退出登录. The layout is fluid');
+  lines.push('(Flask-Admin Bootstrap4Theme(fluid=True)).');
+  lines.push('');
   lines.push('## Modules');
   lines.push('');
   for (const module of modules) {
@@ -665,6 +707,38 @@ function renderReadme(isd, adminAccount, adminPassword) {
 }
 
 
+
+function renderAdminMaster(isd) {
+  return `{% extends 'admin/base.html' %}
+
+{% block access_control %}
+{% if current_user.is_authenticated %}
+<ul class="nav navbar-nav ml-auto">
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="swatch-menu" data-toggle="dropdown"
+       role="button" aria-haspopup="true" aria-expanded="false">主题</a>
+    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="swatch-menu">
+      {% for swatch in theme_swatches %}
+      <a class="dropdown-item{% if swatch == current_swatch %} active{% endif %}"
+         href="{{ url_for('set_theme', swatch=swatch) }}">{{ swatch }}</a>
+      {% endfor %}
+    </div>
+  </li>
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="user-menu" data-toggle="dropdown"
+       role="button" aria-haspopup="true" aria-expanded="false">
+      <i class="fa fa-user"></i> {{ current_user.username }}
+    </a>
+    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="user-menu">
+      <a class="dropdown-item" href="{{ url_for('logout') }}">退出登录</a>
+    </div>
+  </li>
+</ul>
+{% endif %}
+{% endblock %}
+`;
+}
+
 function renderDashboardPage(isd) {
   const name = isd.project.name;
   return `{% extends 'admin/master.html' %}
@@ -680,21 +754,21 @@ function renderDashboardPage(isd) {
   <div class="row">
     {% for stat in stats %}
     <div class="col-md-4 col-sm-6">
-      <div class="panel panel-default">
-        <div class="panel-body">
-          <h4 style="margin:0 0 8px">{{ stat.label }}</h4>
-          <p style="font-size:32px;font-weight:700;margin:0;line-height:1.1">{{ stat.count }}</p>
-          <p style="color:#888;margin:2px 0 12px">条记录</p>
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">{{ stat.label }}</h5>
+          <p class="display-4" style="font-size:30px;margin:0">{{ stat.count }}</p>
+          <p class="text-muted mb-3">条记录</p>
           <a class="btn btn-primary btn-sm" href="{{ url_for(stat.endpoint + '.index_view') }}">查看列表</a>
-          <a class="btn btn-default btn-sm" href="{{ url_for(stat.endpoint + '.create_view') }}">新增</a>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for(stat.endpoint + '.create_view') }}">新增</a>
         </div>
       </div>
     </div>
     {% endfor %}
   </div>
   {% if not stats %}
-  <div class="panel panel-default">
-    <div class="panel-body" style="color:#777">
+  <div class="card">
+    <div class="card-body text-muted">
       还没有可展示的业务模块。
     </div>
   </div>
