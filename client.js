@@ -145,11 +145,20 @@ window.__ModuleLoader__.load({
      * then browser language, then the product default — Chinese.
      */
     function resolveLang(ctx) {
+      // A manual choice persisted in this panel beats every automatic signal.
+      try {
+        const stored = localStorage.getItem('isb-lang');
+        if (stored === 'zh' || stored === 'en') return stored;
+      } catch {
+        // storage unavailable
+      }
       try {
         const locale = ctx.get('locale');
         if (locale && typeof locale.getLocale === 'function') {
           const snap = locale.getLocale() || {};
-          const id = String(snap.id || snap.locale || snap.language || '').toLowerCase();
+          // Real DSH snapshot: { preference: 'zh' | 'en' }. Accept common
+          // aliases too so the check survives future shape changes.
+          const id = String(snap.preference || snap.id || snap.locale || snap.language || '').toLowerCase();
           return id.startsWith('en') ? 'en' : 'zh';
         }
       } catch {
@@ -162,6 +171,16 @@ window.__ModuleLoader__.load({
         // Non-browser test environment.
       }
       return 'zh';
+    }
+
+    const LANG_LABEL = { zh: 'EN', en: '中' };
+
+    function persistLang(lang) {
+      try {
+        localStorage.setItem('isb-lang', lang);
+      } catch {
+        // storage unavailable — the toggle still works for this session
+      }
     }
 
     /** Text source: `t(key)` plus the resolved language code. */
@@ -482,17 +501,29 @@ window.__ModuleLoader__.load({
     /* Wizard page (main panel)                                           */
     /* ------------------------------------------------------------------ */
     function WizardPage(props) {
-      const t = props.text;
       const app = props.app;
       const [tab, setTab] = React.useState('new');
+      const [lang, setLangState] = React.useState(() => props.text.lang);
+      const t = (key) => (DICT[lang] || DICT.zh)[key] ?? DICT.zh[key] ?? key;
+      t.lang = lang;
+      const flipLang = () => {
+        const next = lang === 'zh' ? 'en' : 'zh';
+        persistLang(next);
+        setLangState(next);
+      };
 
       return h('div', { className: 'isb-root' },
         h(Style, null),
         h('div', { className: 'isb-header' },
           h('div', { className: 'isb-header-icon' }, h(PanelIcon, { size: 26, active: true })),
-          h('div', null,
+          h('div', { className: 'isb-header-text' },
             h('h1', { className: 'isb-title' }, t('app.title')),
-            h('p', { className: 'isb-tagline' }, t('app.tagline')))),
+            h('p', { className: 'isb-tagline' }, t('app.tagline'))),
+          h('button', {
+            className: 'isb-lang-toggle', type: 'button',
+            title: lang === 'zh' ? 'Switch to English' : '切换为中文',
+            onClick: flipLang,
+          }, LANG_LABEL[lang])),
         h('div', { className: 'isb-tabs' },
           h('button', {
             className: 'isb-tab' + (tab === 'new' ? ' isb-tab-active' : ''), type: 'button',
@@ -516,7 +547,10 @@ window.__ModuleLoader__.load({
 .isb-header{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .isb-header-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1)}
 .isb-title{font-size:20px;font-weight:650;margin:0;line-height:1.2}
+.isb-header-text{flex:1;min-width:0}
 .isb-tagline{margin:2px 0 0;font-size:13px;color:var(--dsw-alias-label-secondary)}
+.isb-lang-toggle{margin-left:auto;padding:5px 12px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.isb-lang-toggle:hover{border-color:var(--dsw-alias-brand-primary)}
 .isb-tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .isb-tab{padding:8px 14px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .isb-tab-active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
