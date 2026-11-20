@@ -1,8 +1,12 @@
 {
   "name": "@local/info-system-builder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": "^0.2.2-rc.5"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

@@ -20,7 +20,7 @@
 
 ## 安装
 
-前提：已安装 [DeepSeek Harness](https://deepseek.com)（桌面版）。
+前提：已安装 [DeepSeek Harness](https://deepseek.com)（桌面版）。支持 DSH `^0.2.2-rc.5`（即 `0.2.2-rc.5` 及以上、`0.2.x` 预发布系列，例如 `0.2.3-rc.1`；不兼容 `0.3.x`）。
 
 ```bash
 git clone git@github.com:wyf0931/dsh-info-system-builder.git
